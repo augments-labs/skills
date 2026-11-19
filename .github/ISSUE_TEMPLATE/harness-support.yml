@@ -1,12 +1,12 @@
 name: Harness support or regression
-description: Request support for a new coding-agent harness or report a packaging/hook regression on an existing one.
+description: Request support for a new coding-agent harness, or report a packaging or hook regression on an existing one.
 labels: ["enhancement"]
 body:
   - type: input
     id: harness
     attributes:
       label: Harness name, version, and docs URL
-      placeholder: e.g. Example CLI 2.1.0 — https://example.com/docs
+      placeholder: e.g. Example CLI 2.1.0, https://example.com/docs
     validations:
       required: true
   - type: textarea

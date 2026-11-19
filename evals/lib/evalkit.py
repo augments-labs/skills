@@ -42,8 +42,8 @@ SCOREBOARD_HEADER = [
     "| --- | --- | --- | --- | --- | --- | --- |",
 ]
 SCOREBOARD_PENDING = ("| *(Pending first evaluated promotion for `v0.0.1`)* "
-                      "| \u2014 | \u2014 | \u2014 | \u2014 | \u2014 | \u2014 |")
-DASH = "\u2014"
+                      "| n/a | n/a | n/a | n/a | n/a | n/a |")
+DASH = "n/a"
 
 
 class Invalid(Exception):
