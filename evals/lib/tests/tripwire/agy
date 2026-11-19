@@ -1,0 +1,8 @@
+#!/bin/sh
+# Tripwire: stands in for a real agent CLI during offline suites. Logs the
+# attempted call and fails, so no suite can reach a live model. The log falls
+# back to this directory because isolated sessions clear the environment.
+log="${TRIPWIRE_LOG:-$(dirname "$0")/tripwire.log}"
+printf 'TRIPWIRE: %s invoked with: %s\n' "$(basename "$0")" "$*" >> "$log" 2>/dev/null
+printf 'TRIPWIRE: refusing to run the real %s CLI in an offline suite\n' "$(basename "$0")" >&2
+exit 97

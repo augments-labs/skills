@@ -1,0 +1,10 @@
+{"type":"thread.started","thread_id":"th-1"}
+{"type":"turn.started"}
+{"type":"item.started","item":{"id":"item-1","type":"command_execution","command":"cat /tmp/home/.codex/skills/demo-skill/SKILL.md","aggregated_output":"","status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item-1","type":"command_execution","command":"cat /tmp/home/.codex/skills/demo-skill/SKILL.md","aggregated_output":"# demo","exit_code":0,"status":"completed"}}
+{"type":"item.completed","item":{"id":"item-2","type":"file_change","changes":[{"path":"src/app.js","kind":"update"}]}}
+{"type":"item.completed","item":{"id":"item-3","type":"agent_message","text":"done: the fix is in"}}
+{"type":"turn.completed","usage":{"input_tokens":50,"output_tokens":10}}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item-4","type":"command_execution","command":"cat /tmp/home/.codex/skills/demo-skill/SKILL.md","aggregated_output":"# demo","exit_code":0,"status":"completed"}}
+{"type":"turn.completed","usage":{"input_tokens":20,"output_tokens":5}}
