@@ -26,7 +26,7 @@ A skill resolves from `skills/<pack>/<name>/` or, if not found there, from `skil
 
 ```
 evals/bin/evaluate --pack PACK --skill NAME [--harness claude-code|codex|antigravity]
-    [--arms full,distilled,none | --arms full,old_skill --base COMMIT] [--runs 3]
+    [--arms full,distilled,none | --arms full,old_skill,none --base COMMIT] [--runs 3]
     [--eval IDS] [--model NAME] [--shipped-arm full|distilled] [--timeout 900]
     [--out DIR] [--keep-workdirs] [--allow-unverified] [--dry-run]
 
@@ -54,7 +54,7 @@ evals/bin/report --scoreboard [--check]
 | `none` | nothing installed |
 | `old_skill` | the skill at `--base`, extracted with `git archive` |
 
-A bundle holds `SKILL.md` and the skill's `scripts/`, `references/`, and `assets/` directories, and nothing else. Hooks are off in every arm, and records carry `hooks_enabled: false`. `--arms full,distilled,none` runs in promotion mode. `--arms full,old_skill` runs in edit mode.
+A bundle holds `SKILL.md` and the skill's `scripts/`, `references/`, and `assets/` directories, and nothing else. Hooks are off in every arm, and records carry `hooks_enabled: false`. `--arms full,distilled,none` runs in promotion mode. An `--arms` list with `old_skill` runs in edit mode; keep `none` in it, because the eval-record gate checks the controls against `none`.
 
 ## Cases (`evals.json`)
 
