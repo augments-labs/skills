@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Offline eval harness check (no live LLM calls).
 # Dispatches syntax checks by shebang/extension, runs the offline fake-cli
-# suites with tripwire shims ahead of every real agent CLI on PATH, and checks
-# the README scoreboard against evals/results/.
+# suites with tripwire shims ahead of every real agent CLI on PATH, loads every
+# skill's cases and triggering queries, and checks the README scoreboard
+# against evals/results/.
 set -euo pipefail
 export LC_ALL=C
 cd "$(dirname "${BASH_SOURCE[0]}")/../.."
@@ -57,6 +58,27 @@ if [ -d evals/lib/tests ]; then
 fi
 
 if command -v python3 >/dev/null 2>&1; then
+  # Every pack's cases, queries, and verifiers must load, so a broken case
+  # fails here rather than in a paid live run.
+  for ej in evals/*/*/evals.json; do
+    [ -f "$ej" ] || continue
+    d="${ej%/evals.json}"; rel="${d#evals/}"; pack="${rel%%/*}"; name="${rel#*/}"
+    case "$pack" in bin|lib|harnesses|results|workspaces) continue ;; esac
+    python3 -I evals/lib/evalkit.py cases "$ej" >/dev/null \
+      || { echo "FAIL: invalid eval cases: $ej" >&2; errors=$((errors + 1)); }
+    for v in "$d"/*.py; do
+      [ -f "$v" ] && check_script "$v"
+    done
+    [ -f "$d/queries.json" ] || continue
+    sk="skills/$pack/$name/SKILL.md"
+    [ -f "$sk" ] || sk="skills/in-progress/$name/SKILL.md"
+    manual=0
+    if [ -f "$sk" ] && grep -qE '^disable-model-invocation:[[:space:]]*true[[:space:]]*$' "$sk"; then manual=1; fi
+    python3 -I evals/lib/evalkit.py queries "$d/queries.json" "$manual" >/dev/null \
+      || { echo "FAIL: invalid triggering queries: $d/queries.json" >&2; errors=$((errors + 1)); }
+  done
+  find evals -type d -name __pycache__ -prune -exec rm -rf {} + 2>/dev/null || true
+
   python3 -I evals/lib/evalkit.py scoreboard README.md evals/results --check \
     || { echo "FAIL: README scoreboard drifted from evals/results (run evals/bin/report --scoreboard)" >&2; errors=$((errors + 1)); }
 fi
@@ -65,4 +87,4 @@ if [ "$errors" -gt 0 ]; then
   exit 1
 fi
 
-echo "ok: evals/bin/check passed (offline syntax, fake-cli suites under the tripwire, scoreboard)."
+echo "ok: evals/bin/check passed (offline syntax, fake-cli suites under the tripwire, cases and queries, scoreboard)."
