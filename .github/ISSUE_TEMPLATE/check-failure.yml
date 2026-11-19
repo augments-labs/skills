@@ -1,5 +1,5 @@
 name: Hook, script, or eval runner failure
-description: A deterministic hook, validator, sync script, or eval runner fails, hangs, or produces a false positive/negative.
+description: A deterministic hook, validator, sync script, or eval runner fails, hangs, or produces a false positive or false negative.
 labels: ["bug"]
 body:
   - type: input

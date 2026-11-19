@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Search open and closed issues/PRs first. Promoted skills must address a concrete failure that frontier models still hit and pass 3-arm evaluation (`full` vs `distilled` vs `none`) before promotion out of `skills/in-progress/`.
+        Search open and closed issues and PRs first. A skill is promoted out of `skills/in-progress/` only if it addresses a concrete failure that frontier models still hit and passes 3-arm evaluation (`full` vs `distilled` vs `none`).
   - type: dropdown
     id: pack
     attributes:
@@ -35,20 +35,20 @@ body:
     id: eval-seed
     attributes:
       label: Proposed deterministic eval case
-      description: A concrete task and objective pass/fail check that separates `with_skill` from `without_skill`.
+      description: A concrete task and an objective pass/fail check that separates `with_skill` from `without_skill`.
     validations:
       required: true
   - type: textarea
     id: alternatives
     attributes:
       label: Why not a hook, linter, or existing skill?
-      description: Mechanical invariants belong in hooks/CI; project conventions belong in repo-local checks (`writing-skills` with `references/repo-verification-skills.md`).
+      description: Mechanical invariants belong in hooks or CI. Project conventions belong in repo-local checks (`writing-skills` with `references/repo-verification-skills.md`).
     validations:
       required: true
   - type: textarea
     id: environment
     attributes:
       label: Authoring environment
-      description: Say whether a human, agent, or both drafted this, with harness + version and model id if an agent helped.
+      description: Say whether a human, an agent, or both drafted this. If an agent helped, give the harness + version and model id.
     validations:
       required: true

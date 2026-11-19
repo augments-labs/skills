@@ -8,7 +8,7 @@ RP="$TL_EVALS/bin/report"
 # --- the real README ----------------------------------------------------------
 ( unset EVALS_REPO_ROOT; "$RP" --scoreboard --check ) > "$TL_TMP/real.out" 2>&1
 eq "the repository README scoreboard is current" 0 $?
-contains "an empty results dir keeps the pending row" "$TL_ROOT/README.md" "| *(Pending first evaluated promotion for \`v0.0.1\`)* | — | — | — | — | — | — |"
+contains "an empty results dir keeps the pending row" "$TL_ROOT/README.md" "| *(Pending first evaluated promotion for \`v0.0.1\`)* | n/a | n/a | n/a | n/a | n/a | n/a |"
 
 # --- a fixture repository -----------------------------------------------------
 repo="$(tl_make_repo repo)" || tl_done

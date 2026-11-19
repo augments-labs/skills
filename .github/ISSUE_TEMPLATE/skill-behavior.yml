@@ -1,11 +1,11 @@
 name: Skill behavior bug
-description: A skill failed to trigger, triggered falsely, caused bloat/loops, or led an agent to the wrong outcome.
+description: A skill failed to trigger, triggered when it should not have, caused bloat or loops, or led an agent to the wrong outcome.
 labels: ["bug"]
 body:
   - type: markdown
     attributes:
       value: |
-        Search open and closed issues first. Never paste secrets, tokens, or personal data — redact them by kind (e.g., `[token]`).
+        Search open and closed issues first. Never paste secrets, tokens, or personal data. Redact them by kind (e.g., `[token]`).
   - type: input
     id: skill
     attributes:

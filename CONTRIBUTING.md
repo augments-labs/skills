@@ -16,13 +16,19 @@ Thank you for contributing. This guide is written for people; coding agents read
 
 ## Branching and making a change
 
-1. Fork or clone the repository and create a task branch from `dev`. `main` is
-   reserved for releases and hotfixes only.
-2. Keep one logical change per pull request.
-3. Edit canonical sources under `skills/<pack>/` or `hooks/<pack>/`, never the
+1. Fork or clone the repository and create your own branch from `dev`, for
+   example `task/<topic>`. Never commit or push to `dev` or `main` directly;
+   branch protection rejects it. `main` is reserved for releases and hotfixes,
+   and the `release/`, `hotfix/`, and `backmerge/` prefixes are reserved for
+   maintainers.
+2. Open your pull request against `dev`. It is squash-merged once the required
+   checks pass, and a branch in this repository is deleted automatically after
+   the merge. On a fork, delete your branch yourself.
+3. Keep one logical change per pull request.
+4. Edit canonical sources under `skills/<pack>/` or `hooks/<pack>/`, never the
    generated plugin bundles under `plugins/<plugin>/`. Run
    `bash scripts/sync-plugins.sh` after editing promoted skills or hooks.
-4. Follow the authoring rules in [`AGENTS.md`](AGENTS.md): strict Agent Skills
+5. Follow the authoring rules in [`AGENTS.md`](AGENTS.md): strict Agent Skills
    conformance, gerund/activity kebab-case names (`debugging`, `verifying`,
    `changing-a-live-schema`, `finishing-a-branch`, `reviewing-code`) with no
    built-in slash-command shadowing (e.g., `review`, `simplify`, `plan`), body
@@ -30,10 +36,10 @@ Thank you for contributing. This guide is written for people; coding agents read
    description caps (`<= 3,400` auto / `<= 2,400` user / `<= 5,800` combined),
    no custom metadata ledgers, no external references, no vendor model names in
    shipped content, and zero third-party runtime dependencies.
-5. Keep `docs/` strictly for user documentation in plain second person. Put
+6. Keep `docs/` strictly for user documentation in plain second person. Put
    maintainer internals, adapter quirks, and test notes here in
    `CONTRIBUTING.md`.
-6. Never bump versions or add `CHANGELOG.md` version headings in an ordinary
+7. Never bump versions or add `CHANGELOG.md` version headings in an ordinary
    contribution PR (see [`RELEASING.md`](RELEASING.md)).
 
 ## Running deterministic checks
