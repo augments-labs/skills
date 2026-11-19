@@ -139,6 +139,50 @@ to the path each harness reads (`hooks/hooks.json`, `hooks/codex-hooks.json`,
 root `hooks.json`), ships the rest of `hooks/<pack>/` except `tests/`, and
 copies promoted skills flat into `skills/<name>/`.
 
+## Hooks (`hooks/<pack>/`)
+
+Each hook is one entry script, `hooks/<pack>/<hook>.sh`, whose only argument
+names the harness (`claude-code`, `codex`, or `antigravity`). With no
+argument it detects Claude Code or Antigravity from the event shape. The
+shared code lives in `hooks/<pack>/lib/`:
+
+- `adapter.sh` turns a harness event into a shell command or a list of edited
+  paths, and turns the verdict back into that harness's answer.
+- `checks.sh` holds the checks.
+- `walk.sh` and `shell.awk` split a command line into simple commands. They
+  follow `&&`, pipes, subshells, `bash -c`, `eval`, wrappers such as `sudo`
+  and `env`, and heredocs fed to a shell.
+- `json.awk` parses events without `jq`.
+
+To try a check without a harness:
+
+```bash
+bash hooks/engineering/lib/check.sh --hook guard-destructive-git --tool shell --command 'git reset --hard'
+```
+
+It exits 0 to allow and 2 to deny, with the reason on stderr.
+
+Rules for hook code:
+
+- Use bash 3.2 and POSIX awk only (macOS ships both). No `jq`, Python, or
+  other tools; `cygpath` is used on Windows when present.
+- Keep process forks low. Every check runs on every tool call, and process
+  start-up is slow on Windows.
+- Allow events the adapter cannot parse, with a note on stderr. Ignore a
+  malformed `policy.json` with a note, so it grants nothing.
+- Read bypasses only from `~/.config/augments-skills/policy.json`. A
+  repository's `.augments-skills.json` may only add protected branches.
+- On Antigravity, answer `{}` to allow. Never answer `"decision": "allow"`,
+  which approves the call outright and skips the harness's own permission
+  checks.
+
+`tests/run-engineering-hooks.sh` covers every rule with harness-shaped events
+in throwaway repositories and an isolated `HOME`. CI runs it on Linux, on
+macOS with `/bin/bash` 3.2, and on Windows. Add a case for every new rule and
+for every false positive you fix. Live hook tests inside each harness are
+manual for now. User-facing hook behavior is documented in
+[`docs/hooks.md`](docs/hooks.md).
+
 When adding or updating a harness adapter, update `scripts/sync-plugins.sh`,
 add/update `tests/harnesses/<name>.sh`, run
 `tests/run-plugin-smoke.sh --harness <name>`, and update user docs under `docs/`.

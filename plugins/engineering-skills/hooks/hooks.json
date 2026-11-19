@@ -1,0 +1,22 @@
+{
+  "description": "Blocks destructive git and shell commands, work on protected branches, and agent writes to the user's hook policy.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/guard-destructive-git.sh\" claude-code",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/guard-protected-branch.sh\" claude-code",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

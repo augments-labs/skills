@@ -1,0 +1,30 @@
+{
+  "guard-destructive-git": {
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ./hooks/guard-destructive-git.sh antigravity",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  },
+  "guard-protected-branch": {
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ./hooks/guard-protected-branch.sh antigravity",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

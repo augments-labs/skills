@@ -9,6 +9,7 @@
   "repository": "https://github.com/augments-labs/skills",
   "license": "MIT",
   "keywords": ["skills", "engineering", "debugging", "verification", "hooks", "guardrails"],
+  "hooks": "./hooks/codex-hooks.json",
   "interface": {
     "displayName": "Engineering Skills",
     "shortDescription": "Eval-backed engineering skills and guardrail hooks",
