@@ -82,16 +82,19 @@ excluded from all generated plugin bundles under `plugins/`.
      fixes: 0 regression, `<= +2` tool calls, `<= +1` turn, bounded output
      tokens), zero indeterminate runs, and zero assertions awaiting review.
      `arms.<shipped_arm>.skill_tree` matches the **shipped arm** (`full` or
-     `distilled`). If `distilled` matches `full` and beats `none`, ship
-     `distilled`.
-  2. A **triggering record** (`train` / `validation` / `holdout` splits, `>= 3`
-     runs, zero inconclusive queries) for **auto-triggered skills**. Explicit
-     user-invoked skills (`disable-model-invocation: true`) are exempt from
-     positive-triggering splits, but MUST pass a negative-triggering check on
-     spec-only harnesses confirming they do not self-fire on routine prompts.
-- **Editing a promoted skill:** Requires a before/after (`full` vs `old_skill`)
-  record for body/reference/asset changes, and a triggering record for
-  description changes on auto-triggered skills, named as
+     `distilled`). Ship `distilled` only when it beats `none` by `>= 0.20`,
+     passes the controls, and `full` adds `< 0.10` over it.
+  2. A **triggering record** whose `plugin.skill_tree` and
+     `plugin.description_sha256` match the shipped skill (`train` /
+     `validation` / `holdout` splits, `>= 3` runs, zero failed or inconclusive
+     queries) for **auto-triggered skills**. Explicit user-invoked skills
+     (`disable-model-invocation: true`) are exempt from positive-triggering
+     splits, but MUST pass a `negative` split on spec-only harnesses
+     confirming they do not self-fire on routine prompts.
+- **Editing a promoted skill:** A change to any file under
+  `skills/<pack>/<name>/`, `scripts/` included, requires both records again,
+  measured on the edited tree: a before/after benchmark (`full` vs
+  `old_skill`, plus `none` for the controls) and a triggering record, named as
   `Eval record: evals/results/<dir>` in the PR body.
 - **Anti-gaming & self-attestation:** Changes to `evals/<pack>/<name>/**`
   (assertions, queries, fixtures, verifiers, or `distilled/SKILL.md`) should
@@ -100,8 +103,8 @@ excluded from all generated plugin bundles under `plugins/`.
   `.github/workflows/eval-record.yml` or `scripts/check-eval-record.sh` cannot
   attest its own skill edit.
 - **Retirement:** When a newer frontier model closes the gap (`shipped - none`
-  drops to noise), move the skill to `skills/deprecated/` alongside the eval
-  record.
+  drops to noise), move the skill to `skills/deprecated/` and name the eval
+  record that shows it in the PR body (or get the `no-eval` label).
 - **Never commit `evals/workspaces/` or raw transcripts**, and **never run live
   models in CI**.
 

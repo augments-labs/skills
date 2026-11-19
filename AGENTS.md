@@ -114,26 +114,29 @@ Files under `skills/`, `hooks/`, `plugins/`, and `docs/` ship to users.
 - **Staging vs promoted:**
   - Skills in `skills/in-progress/` may be authored and iterated without an eval
     record.
-  - Promoting a skill into `skills/<pack>/`, or editing any promoted skill's
-    `SKILL.md`, `references/`, or `assets/`, requires matching committed records
-    under `evals/results/` named via `Eval record: evals/results/<dir>` in the
-    PR body:
-    - **Auto-triggered skill (`description` change or new promotion):**
-      `triggering.json` with matching `plugin.description_sha256` (or top-level
-      `description_sha256`), `>= 3` runs, a validation split, and zero
+  - Promoting a skill into `skills/<pack>/`, or editing any file of a promoted
+    skill (`SKILL.md`, `scripts/`, `references/`, or `assets/`), requires
+    matching committed records under `evals/results/` named via
+    `Eval record: evals/results/<dir>` in the PR body.
+    `scripts/check-eval-record.sh` reads every named record at the PR head and
+    needs one passing record of each kind for every touched skill:
+    - **`triggering.json`:** `plugin.skill_tree` and
+      `plugin.description_sha256` match the shipped skill, `>= 3` runs, and
+      passing `train`, `validation`, and `holdout` splits with zero failed or
       inconclusive queries. Explicit user-invoked skills
       (`disable-model-invocation: true`) are exempt from positive-triggering
-      splits, but MUST pass a negative-triggering check on spec-only harnesses
-      proving they do not self-fire on routine prompts.
-    - **Body/references/assets change or new promotion:** `benchmark.json`
-      whose `arms.<shipped_arm>.skill_tree` matches the shipped tree (`full` or
-      `distilled` against `none` for promotions; `full` against `old_skill` for
-      edits to promoted skills). It must have `>= 3` scored runs per eval case
-      across realistic multi-file tasks plus denominator-safe anti-ceremony
-      controls, zero indeterminate runs, and zero `needs_review` assertions.
-      The controls are non-triggering trivial tasks (0 skill loads, 0
-      unrequested files, `<= +1` tool call) and small in-scope fixes (0
-      regression, `<= +2` tool calls, `<= +1` turn, bounded output tokens).
+      splits, but MUST pass a `negative` split on spec-only harnesses proving
+      they do not self-fire on routine prompts.
+    - **`benchmark.json`:** hooks disabled and `arms.<shipped_arm>.skill_tree`
+      matching the shipped tree (`full` or `distilled` against `none` for
+      promotions; `full` against `old_skill` and `none` for edits to promoted
+      skills), with `>= 3` scored runs per eval case in every arm across
+      realistic multi-file tasks plus denominator-safe anti-ceremony controls
+      against `none` (non-triggering trivial tasks: 0 skill loads, 0
+      unrequested files, `<= +1` tool call; small in-scope fixes: 0 regression,
+      `<= +2` tool calls, `<= +1` turn, `<= 1.5x` output tokens), zero
+      indeterminate runs, and zero `needs_review` assertions. `distilled` ships
+      only when it beats `none` by `>= 0.20` and `full` adds `< 0.10`.
   - **Security separation of config:** Human hook bypasses and external CLI
     commands (such as cross-model review commands) live strictly in user-global
     config outside the repository (`~/.config/augments-skills/`), never in
@@ -148,8 +151,9 @@ Files under `skills/`, `hooks/`, `plugins/`, and `docs/` ship to users.
     it into two PRs, or verify with `dev`'s copy of
     `scripts/check-eval-record.sh`.
   - **Exemptions:** Typos, removals, or moves between folders require the
-    maintainer-applied `no-eval` label. Changes strictly inside `scripts/` or
-    outside `skills/` rely on deterministic offline tests.
+    maintainer-applied `no-eval` label; without it, a skill removed from its
+    pack needs one named, valid record for it. Changes outside promoted skill
+    directories rely on deterministic offline tests.
 
 ## Checks before committing
 
