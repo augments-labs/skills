@@ -1,0 +1,19 @@
+{
+  "page": 1,
+  "total_pages": 1,
+  "total": 6,
+  "stations": [
+    {"id": "NO-0001", "name": "oslo blindern", "network": "nordic",
+     "location": {"lat": 59.942, "lon": 10.72, "elevation": 94}},
+    {"id": "NO-0002", "name": "bergen florida", "network": "nordic",
+     "location": {"lat": 60.383, "lon": 5.332, "elevation": 12}},
+    {"id": "SE-0003", "name": "stockholm observatoriet", "network": "nordic",
+     "location": {"lat": 59.342, "lon": 18.055, "elevation": 44}},
+    {"id": "FI-0004", "name": null, "network": "nordic",
+     "location": {"lat": 60.175, "lon": 24.944, "elevation": 4}},
+    {"id": "DK-0005", "name": "kastrup", "network": "nordic",
+     "location": {"lat": 55.614, "lon": 12.646, "elevation": null}},
+    {"id": "IS-0006", "name": "reykjavik", "network": "nordic",
+     "location": {"lat": 64.128, "lon": -21.903, "elevation": 52}}
+  ]
+}

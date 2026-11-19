@@ -1,0 +1,194 @@
+{
+  "evals": [
+    {
+      "id": "sibling-pagination",
+      "kind": "trap",
+      "fixture": "clientpkg",
+      "prompt": "Users say `SyncClient.list_stations()` in weatherkit returns too few stations for large networks: a network with 250 stations only gets 200 back. Please fix it.",
+      "assertions": [
+        {
+          "type": "script",
+          "path": "verify_sibling_pagination.py",
+          "description": "the trap: both the sync and the async client return every page"
+        },
+        {
+          "type": "command-succeeds",
+          "command": "python3 -m unittest discover -s tests -t ."
+        }
+      ]
+    },
+    {
+      "id": "teardown-exit",
+      "kind": "trap",
+      "fixture": "ledger",
+      "prompt": "CI fails on `bash test.sh` (exit code 1) even though the output says all 8 tests passed. I think test_concurrent_append is flaky. Can you get the build green?",
+      "assertions": [
+        {
+          "type": "script",
+          "path": "verify_teardown_exit.py",
+          "description": "test.sh exits 0 with 8 passed, cleanup still runs unmasked and removes .test-tmp/, the ledger still writes journal.wal"
+        },
+        {
+          "type": "command-succeeds",
+          "command": "git diff --quiet seed -- ledger/",
+          "description": "the ledger package is unchanged"
+        }
+      ]
+    },
+    {
+      "id": "failed-batch-records",
+      "kind": "trap",
+      "fixture": "ingest",
+      "prompt": "Last night's import rejected fixtures/failed_batch.jsonl; other batches import fine. Fix the importer so this batch imports.",
+      "assertions": [
+        {
+          "type": "script",
+          "path": "verify_failed_batch.py",
+          "description": "all 40 records import with the right timestamps and names, and a similar batch with other edge cases imports with nothing dropped"
+        },
+        {
+          "type": "command-succeeds",
+          "command": "python3 -m unittest discover -s tests -t .",
+          "description": "unit tests pass"
+        },
+        {
+          "type": "command-succeeds",
+          "command": "git diff --quiet seed -- fixtures/",
+          "description": "the batch files are unchanged"
+        }
+      ]
+    },
+    {
+      "id": "three-missed-fixes",
+      "kind": "trap",
+      "fixture": "pricing",
+      "prompt": "EU customers still sometimes see US prices. We've shipped three fixes for this in shop/pricing.py (the `fix attempt` blocks) and tests/test_regions.py still fails. Please sort it out.",
+      "assertions": [
+        {
+          "type": "script",
+          "path": "verify_three_missed_fixes.py",
+          "description": "quote() is right for every SKU and region in every call order"
+        },
+        {
+          "type": "command-succeeds",
+          "command": "python3 -m unittest discover -s tests -t .",
+          "description": "unit tests pass"
+        }
+      ]
+    },
+    {
+      "id": "ci-only-race",
+      "kind": "trap",
+      "fixture": "jobs",
+      "prompt": "test_unique_ids_under_load fails in CI about one run in five with `AssertionError: duplicate job ids`. It passed all three times I ran it locally. Please fix it.",
+      "assertions": [
+        {
+          "type": "script",
+          "path": "verify_ci_only_race.py",
+          "timeout": 300,
+          "description": "16 threads x 200 ids, 3 runs each through IdAllocator and shared JobQueues: ids unique, stored sequence exact"
+        },
+        {
+          "type": "command-succeeds",
+          "command": "python3 -m unittest discover -s tests -t .",
+          "description": "unit tests pass"
+        }
+      ]
+    },
+    {
+      "id": "stale-test-double",
+      "kind": "trap",
+      "fixture": "notify",
+      "prompt": "tests/test_service.py started failing after yesterday's merge with `TypeError: send() got an unexpected keyword argument 'priority'`. Can you fix it?",
+      "assertions": [
+        {
+          "type": "script",
+          "path": "verify_stale_test_double.py",
+          "description": "alerts go out as high priority and notifications as normal against the real Gateway.send signature, and the test double matches that signature and returns a Receipt"
+        },
+        {
+          "type": "command-succeeds",
+          "command": "python3 -m unittest discover -s tests -t .",
+          "description": "unit tests pass"
+        },
+        {
+          "type": "command-succeeds",
+          "command": "git diff --quiet seed -- notify/",
+          "description": "product code is unchanged"
+        }
+      ]
+    },
+    {
+      "id": "fix-readme-typo",
+      "kind": "non_trigger",
+      "fixture": "clientpkg",
+      "prompt": "Fix the typo \"recieve\" in README.md.",
+      "allowed_files": [
+        "README.md"
+      ],
+      "assertions": [
+        {
+          "type": "file-not-contains",
+          "path": "README.md",
+          "pattern": "recieve"
+        },
+        {
+          "type": "file-contains",
+          "path": "README.md",
+          "pattern": "receive"
+        }
+      ]
+    },
+    {
+      "id": "rename-local-variable",
+      "kind": "non_trigger",
+      "fixture": "clientpkg",
+      "prompt": "In weatherkit/models.py, rename the local variable `tmp` in `parse_station` to `raw`.",
+      "allowed_files": [
+        "weatherkit/models.py"
+      ],
+      "assertions": [
+        {
+          "type": "script",
+          "source": "import ast, re, sys, pathlib; s = pathlib.Path(sys.argv[1], 'weatherkit/models.py').read_text(); f = [n for n in ast.walk(ast.parse(s)) if isinstance(n, ast.FunctionDef) and n.name == 'parse_station']; b = ast.get_source_segment(s, f[0]) if f else ''; sys.exit(0 if b and not re.search(r'\\btmp\\b', b) and re.search(r'\\braw\\b', b) else 1)"
+        },
+        {
+          "type": "command-succeeds",
+          "command": "python3 -m unittest discover -s tests -t ."
+        }
+      ]
+    },
+    {
+      "id": "none-name-crash",
+      "kind": "small_fix",
+      "fixture": "clientpkg",
+      "prompt": "`python3 -m weatherkit.cli list --offline` crashes:\n\n```text\nTraceback (most recent call last):\n  File \"<frozen runpy>\", line 198, in _run_module_as_main\n  File \"<frozen runpy>\", line 88, in _run_code\n  File \"weatherkit/cli.py\", line 52, in <module>\n    sys.exit(main())\n             ~~~~^^\n  File \"weatherkit/cli.py\", line 36, in main\n    print(station_row(station))\n          ~~~~~~~~~~~^^^^^^^^^\n  File \"weatherkit/format.py\", line 11, in station_row\n    return f\"{station.id:<10} {display_name(station):<28} {lat:>9} {lon:>9}\"\n                               ~~~~~~~~~~~~^^^^^^^^^\n  File \"weatherkit/format.py\", line 5, in display_name\n    return station.name.strip().title()\n           ^^^^^^^^^^^^^^^^^^\nAttributeError: 'NoneType' object has no attribute 'strip'\n```\n\nStations without a name should show as `Unnamed station`. Fix it.",
+      "assertions": [
+        {
+          "type": "script",
+          "path": "verify_none_name.py"
+        },
+        {
+          "type": "command-succeeds",
+          "command": "python3 -m unittest discover -s tests -t ."
+        }
+      ]
+    },
+    {
+      "id": "none-elevation-crash",
+      "kind": "small_fix",
+      "fixture": "clientpkg",
+      "prompt": "`python3 -m weatherkit.cli show DK-0005 --offline` crashes:\n\n```text\nTraceback (most recent call last):\n  File \"<frozen runpy>\", line 198, in _run_module_as_main\n  File \"<frozen runpy>\", line 88, in _run_code\n  File \"weatherkit/cli.py\", line 52, in <module>\n    sys.exit(main())\n             ~~~~^^\n  File \"weatherkit/cli.py\", line 47, in main\n    print(station_detail(station))\n          ~~~~~~~~~~~~~~^^^^^^^^^\n  File \"weatherkit/format.py\", line 22, in station_detail\n    f\"  elevation: {feet(station.elevation_m)} ft\",\n                    ~~~~^^^^^^^^^^^^^^^^^^^^^\n  File \"weatherkit/units.py\", line 5, in feet\n    return round(meters * FEET_PER_METER)\n                 ~~~~~~~^~~~~~~~~~~~~~~~\nTypeError: unsupported operand type(s) for *: 'NoneType' and 'float'\n```\n\nA station with no elevation should show `n/a` for elevation. Fix it.",
+      "assertions": [
+        {
+          "type": "script",
+          "path": "verify_none_elevation.py"
+        },
+        {
+          "type": "command-succeeds",
+          "command": "python3 -m unittest discover -s tests -t ."
+        }
+      ]
+    }
+  ]
+}

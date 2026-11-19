@@ -1,0 +1,105 @@
+{
+  "fixture": "clientpkg",
+  "queries": [
+    {
+      "query": "The test suite passes locally but test_checkout fails in CI about once every few runs. Figure out why.",
+      "should_trigger": true,
+      "split": "train"
+    },
+    {
+      "query": "SyncClient.list_stations() returns 200 stations when the network has 250. Why?",
+      "should_trigger": true,
+      "split": "train"
+    },
+    {
+      "query": "Our nightly export started producing empty CSV files last week and nothing in the code changed. Can you find out what's going on?",
+      "should_trigger": true,
+      "split": "train"
+    },
+    {
+      "query": "Why does the app log me out every time I switch tabs? It started after the last deploy.",
+      "should_trigger": true,
+      "split": "train"
+    },
+    {
+      "query": "Fix the typo 'recieve' in README.md.",
+      "should_trigger": false,
+      "split": "train"
+    },
+    {
+      "query": "Add a --json flag to the weatherkit CLI list command.",
+      "should_trigger": false,
+      "split": "train"
+    },
+    {
+      "query": "Checkout is returning 500s for every customer in production right now. What do we do first?",
+      "should_trigger": false,
+      "split": "train"
+    },
+    {
+      "query": "Rename the function parse_station to parse_station_record across the package.",
+      "should_trigger": false,
+      "split": "train"
+    },
+    {
+      "query": "The test runner says 8 passed but the CI job still exits with code 1. What's happening?",
+      "should_trigger": true,
+      "split": "validation"
+    },
+    {
+      "query": "Memory use of the worker keeps climbing until it gets OOM-killed after a few hours. Track down the cause.",
+      "should_trigger": true,
+      "split": "validation"
+    },
+    {
+      "query": "The async client sometimes hangs forever on the second request. No error, it just never returns.",
+      "should_trigger": true,
+      "split": "validation"
+    },
+    {
+      "query": "NameError: name 'json' is not defined in weatherkit/cli.py line 3. Add the missing import.",
+      "should_trigger": false,
+      "split": "validation"
+    },
+    {
+      "query": "Write a post-incident review of last week's outage; the bug is already fixed and deployed.",
+      "should_trigger": false,
+      "split": "validation"
+    },
+    {
+      "query": "Explain how pagination works in this package.",
+      "should_trigger": false,
+      "split": "validation"
+    },
+    {
+      "query": "The pricing tests started failing after I upgraded a dependency, and I can't tell why.",
+      "should_trigger": true,
+      "split": "holdout"
+    },
+    {
+      "query": "Some users get the wrong timezone on their invoices, but I can't reproduce it on my machine.",
+      "should_trigger": true,
+      "split": "holdout"
+    },
+    {
+      "query": "This function returns None for some inputs and I don't understand why.",
+      "should_trigger": true,
+      "split": "holdout"
+    },
+    {
+      "query": "Convert the README to reStructuredText.",
+      "should_trigger": false,
+      "split": "holdout"
+    },
+    {
+      "query": "Bump the version in pyproject.toml to 0.3.0.",
+      "should_trigger": false,
+      "split": "holdout"
+    },
+    {
+      "query": "Write unit tests for weatherkit/units.py.",
+      "should_trigger": false,
+      "split": "holdout"
+    }
+  ]
+}
