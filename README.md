@@ -124,7 +124,7 @@ devin plugins install augments-labs/skills#plugins/engineering-skills
 npx skills add augments-labs/skills/plugins/engineering-skills
 ```
 
-> Note: `npx skills add` installs `SKILL.md` files only, without deterministic hooks. For hook enforcement, install through your harness's plugin mechanism above.
+> Note: `npx skills add` installs `SKILL.md` files only, without deterministic hooks. For hook enforcement, install through your harness's plugin mechanism above. [`docs/hooks.md`](docs/hooks.md) lists what the hooks block and how to turn them off.
 
 ### Additional harnesses (OpenCode, pi, Kimi Code, Hermes, Grok Build, Muse Code)
 
