@@ -47,6 +47,17 @@ bash scripts/validate-trigger-collisions.sh --strict
 bash evals/bin/check
 ```
 
+`scripts/validate.sh` also runs `bash scripts/sync-plugins.sh --check`, which
+fails when `plugins/<plugin>/` differs from what `skills/<pack>/` and
+`hooks/<pack>/` produce, and a dangling-reference check: promoted and
+in-progress skills may name only promoted skills, and only support files that
+exist inside the skill. To run these checks on every relevant commit, install
+the optional pre-commit hook (`--remove` undoes it):
+
+```bash
+bash scripts/install-git-hooks.sh
+```
+
 ## Evaluations (`evals/`)
 
 All behavior and triggering evaluations live in `evals/` at the repository root
@@ -104,9 +115,9 @@ hook schema.
 
 | Harness | Packaging surface | Known constraints |
 | --- | --- | --- |
-| Claude Code | `.claude-plugin/marketplace.json` -> `plugins/<plugin>/` | Strict `marketplace.json` owner schema (`name`, optional `email`, no `url`); `PreToolUse`/`PostToolUse` hooks |
-| Codex CLI | `.agents/plugins/marketplace.json` -> `plugins/<plugin>/` | Version lives in `plugins/<plugin>/.codex-plugin/plugin.json`; edits use `apply_patch` |
-| Antigravity | `plugins/<plugin>/.antigravity-plugin/plugin.json` | Supports `PreToolUse`/`PostToolUse`/`Stop` hooks + native subagents; avoid colliding `rules/` with Cursor |
+| Claude Code | `.claude-plugin/marketplace.json` -> `plugins/<plugin>/` | Strict `marketplace.json` owner schema (`name`, optional `email`, no `url`); discovers `skills/` and `hooks/hooks.json` at the plugin root; `PreToolUse`/`PostToolUse` hooks |
+| Codex CLI | `.agents/plugins/marketplace.json` -> `plugins/<plugin>/` | Manifest names component paths (`skills`, `hooks` -> `hooks/codex-hooks.json`); installs into `$CODEX_HOME/plugins/cache/`; edits use `apply_patch` |
+| Antigravity | `plugins/<plugin>/.antigravity-plugin/plugin.json` | Reads components from the plugin root only: hooks from root `hooks.json` (one named entry per hook; commands run in the plugin folder, and older builds do not set `${PLUGIN_ROOT}`), never `.antigravity-plugin/rules/` or `hooks/hooks.json`; check with `agy plugin validate --json` |
 | Cursor | `plugins/<plugin>/` (cloned/copied locally) | Rejects symlinks outside `~/.cursor/plugins/local/`; auto-loads any `rules/` at plugin root |
 | Devin | `plugins/<plugin>/.devin-plugin/plugin.json` | No `skills` field in manifest; no `AGENTS.md` at plugin root; hooks fail open; tool names `exec`/`edit`/`write` |
 | OpenCode (1.x/2.x) | Root `index.js` + `package.json` -> plugin JS | Single module supports 1.x named exports + 2.x `default.setup(ctx)` + `default.id`; zero npm deps |
@@ -114,11 +125,20 @@ hook schema.
 | Grok Build | `plugins/<plugin>/` + `$GROK_HOME/rules/` | Tool events support `additionalContext`; `SessionStart` discarded on 1.0.40 |
 | Kimi Code | `.kimi-plugin/plugin.json` | No compaction event; subagents need full file paths |
 | Hermes | `.hermes-plugin/` | No root `plugin.yaml`/`plugin.json`; system-prompt sections `<= 4k` each, `<= 8k` total; user answers "no" to root `package.json` Node-dep prompt |
+| `npx skills add` | `plugins/<plugin>/skills/<name>/SKILL.md` (flat) | Skills only, no hooks; the smoke driver pins the CLI version and disables its telemetry |
 | Muse Code | `.muse-plugin/plugin.json` + `scripts/install-muse-skills.sh` | 1.3.0 installs individual skills via CLI (`--pack engineering`) |
+
+`scripts/sync-plugins.sh` maps `hooks/<pack>/config/{claude-code,codex,antigravity}.json`
+to the path each harness reads (`hooks/hooks.json`, `hooks/codex-hooks.json`,
+root `hooks.json`), ships the rest of `hooks/<pack>/` except `tests/`, and
+copies promoted skills flat into `skills/<name>/`.
 
 When adding or updating a harness adapter, update `scripts/sync-plugins.sh`,
 add/update `tests/harnesses/<name>.sh`, run
 `tests/run-plugin-smoke.sh --harness <name>`, and update user docs under `docs/`.
+The smoke test installs into an isolated home with no model call; with no
+promoted skill yet it installs a temporary copy carrying one sample skill.
+CI skips it because it needs each harness CLI.
 
 ## Opening a pull request
 
