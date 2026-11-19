@@ -1,0 +1,5 @@
+{"type":"thread.started","thread_id":"th-2"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item-1","type":"command_execution","command":"cat src/app.js","aggregated_output":"","exit_code":0,"status":"completed"}}
+{"type":"item.completed","item":{"id":"item-2","type":"agent_message","text":"no skill needed"}}
+{"type":"turn.completed","usage":{"input_tokens":30,"output_tokens":4}}

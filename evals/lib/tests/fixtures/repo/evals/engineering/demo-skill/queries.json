@@ -1,0 +1,11 @@
+{
+  "fixture": "app",
+  "queries": [
+    {"query": "Rename the widget called oldWidget", "should_trigger": true, "split": "train"},
+    {"query": "Rename the gadget called oldGadget", "should_trigger": true, "split": "train"},
+    {"query": "What time is it in Tokyo", "should_trigger": false, "split": "train"},
+    {"query": "The gadget label is wrong, rename it", "should_trigger": true, "split": "validation"},
+    {"query": "Write a haiku about rain", "should_trigger": false, "split": "validation"},
+    {"query": "Swap the gadget title", "should_trigger": true, "split": "holdout"}
+  ]
+}

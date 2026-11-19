@@ -1,0 +1,41 @@
+{
+  "evals": [
+    {
+      "id": "rename-widget",
+      "kind": "trap",
+      "fixture": "app",
+      "prompt": "Rename the widget oldWidget to newWidget.",
+      "assertions": [
+        {"type": "file-exists", "path": "src/app.js"},
+        {"type": "file-contains", "path": "src/app.js", "pattern": "\\bnewWidget\\b"},
+        {"type": "file-not-contains", "path": "src/app.js", "pattern": "oldWidget"},
+        {"type": "file-contains", "path": "registry.txt", "pattern": "^newWidget$",
+         "description": "the trap: the registry must follow the rename"},
+        {"type": "command-succeeds", "command": "grep -qx newWidget registry.txt"},
+        {"type": "git-count", "count": "changed_files", "min": 1, "max": 2},
+        {"type": "script", "path": "verify_registry.py"}
+      ]
+    },
+    {
+      "id": "fix-readme-typo",
+      "kind": "non_trigger",
+      "fixture": "app",
+      "prompt": "Fix the typo in README.md.",
+      "allowed_files": ["README.md"],
+      "assertions": [
+        {"type": "file-not-contains", "path": "README.md", "pattern": "Teh"},
+        {"type": "git-count", "count": "commits", "max": 0}
+      ]
+    },
+    {
+      "id": "change-greeting",
+      "kind": "small_fix",
+      "fixture": "app",
+      "prompt": "Change the greeting in src/app.js from Hello to Hi.",
+      "assertions": [
+        {"type": "file-contains", "path": "src/app.js", "pattern": "\"Hi\""},
+        {"type": "script", "source": "import sys, pathlib; t = pathlib.Path(sys.argv[1], 'src/app.js').read_text(); sys.exit(0 if 'Hello' not in t else 1)"}
+      ]
+    }
+  ]
+}

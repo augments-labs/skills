@@ -1,0 +1,5 @@
+{"type":"system","subtype":"init","session_id":"sess-1","tools":["Skill","Read","Glob","Grep"],"model":"fixture-model-1"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_1","name":"Skill","input":{"skill":"eval-bundle:demo-skill"}}]},"session_id":"sess-1"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_2","name":"Read","input":{"file_path":"src/app.js"}}]},"session_id":"sess-1"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"loaded"}]},"session_id":"sess-1"}
+{"type":"result","subtype":"success","is_error":false,"duration_ms":4200,"num_turns":3,"result":"done: the fix is in","session_id":"sess-1","usage":{"input_tokens":120,"output_tokens":30}}
