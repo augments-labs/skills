@@ -14,8 +14,11 @@
 # Paths join object keys with "." and array indexes as [n]: tool_input.command,
 # toolCall.args.CommandLine, protectedBranches[0]. Exit 1 on malformed JSON.
 
+# Lines are joined with spaces: a newline is only whitespace in valid JSON,
+# and some awks also split on newline when split() has a one-character
+# separator.
 BEGIN { buf = "" }
-{ buf = buf $0 "\n" }
+{ buf = buf $0 " " }
 END {
   mode = ENVIRON["AUG_JMODE"]; want = ENVIRON["AUG_JPATH"]; keyre = ENVIRON["AUG_JKEY"]
   if (mode == "") mode = "check"
