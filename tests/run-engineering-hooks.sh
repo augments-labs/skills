@@ -19,6 +19,17 @@ mkdir -p "$HOME" "$TMPDIR"
 B=bash
 [ "$(uname -s)" = Darwin ] && [ -x /bin/bash ] && B=/bin/bash
 echo "hooks run with $("$B" -c 'echo "$BASH_VERSION"')"
+# DIAG-START (temporary)
+if [ "$(uname -s)" = Darwin ]; then
+  awk --version 2>&1 | head -1; awk -Wversion 2>&1 | head -1
+  sed 's|^  lex()$|  lex(); for (q = 1; q <= nt; q++) printf "tok %d [%s] [%s]\\n", q, tt[q], tv[q] > "/dev/stderr"; printf "bad=%s nt=%d\\n", bad, nt > "/dev/stderr"|' hooks/engineering/lib/json.awk > "$tmp/diag.awk"
+  grep -n 'lex();' "$tmp/diag.awk"
+  for j in '{}' '[]' '"x"' '1' '{"a":"b"}' '{"a":1}' '{"a":[1,"x"]}'; do
+    printf '%s\n' "$j" | AUG_JMODE=multi AUG_JPATH=a awk -f "$tmp/diag.awk" | od -c | head -2
+    echo "json $j rc=${PIPESTATUS[1]}"
+  done
+fi
+# DIAG-END
 git config --global user.name tester
 git config --global user.email tester@example.invalid
 git config --global init.defaultBranch main
