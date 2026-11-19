@@ -1,0 +1,22 @@
+{
+  "name": "engineering-skills",
+  "version": "0.0.0",
+  "description": "Engineering constraints, verification, production-safety skills, and deterministic hooks for coding agents.",
+  "author": {
+    "name": "Augments Labs"
+  },
+  "homepage": "https://github.com/augments-labs/skills",
+  "repository": "https://github.com/augments-labs/skills",
+  "license": "MIT",
+  "keywords": ["skills", "engineering", "debugging", "verification", "hooks", "guardrails"],
+  "interface": {
+    "displayName": "Engineering Skills",
+    "shortDescription": "Eval-backed engineering skills and guardrail hooks",
+    "longDescription": "Focused, eval-backed skills for debugging, verification, and production-safe changes, plus deterministic hooks that block destructive git commands and direct writes to protected branches.",
+    "developerName": "Augments Labs",
+    "category": "Coding",
+    "capabilities": ["Interactive", "Read", "Write"],
+    "websiteURL": "https://github.com/augments-labs/skills",
+    "defaultPrompt": ["Debug this failing test.", "Verify this change before I merge it."]
+  }
+}

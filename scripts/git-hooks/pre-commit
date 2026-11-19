@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Optional local pre-commit hook (install with scripts/install-git-hooks.sh).
+# Runs the same deterministic checks as CI when a staged path can affect them,
+# and refuses paths that must never be committed. No third-party tool.
+
+set -uo pipefail
+cd "$(git rev-parse --show-toplevel)" || exit 1
+
+staged="$(git diff --cached --name-only --diff-filter=ACMRD)"
+[ -n "$staged" ] || exit 0
+
+if printf '%s\n' "$staged" | grep -qE '^(\.plans/|evals/workspaces/)'; then
+  echo "pre-commit: .plans/ and evals/workspaces/ are never committed:" >&2
+  printf '%s\n' "$staged" | grep -E '^(\.plans/|evals/workspaces/)' | sed 's/^/  /' >&2
+  exit 1
+fi
+
+relevant='^(skills/|hooks/|plugins/|evals/|scripts/|tests/|docs/|\.claude-plugin/|\.agents/|\.github/|README\.md$|AGENTS\.md$|package\.json$)'
+printf '%s\n' "$staged" | grep -qE "$relevant" || exit 0
+
+fail=0
+for check in \
+  "bash scripts/validate.sh --strict" \
+  "bash scripts/token-budget.sh --check" \
+  "bash scripts/validate-trigger-collisions.sh --strict" \
+  "bash evals/bin/check"; do
+  out="$($check 2>&1)" || { echo "pre-commit: FAILED: $check" >&2; printf '%s\n' "$out" | sed 's/^/  /' >&2; fail=1; }
+done
+[ "$fail" -eq 0 ] || echo "pre-commit: fix the failures above (after editing skills or hooks, run: bash scripts/sync-plugins.sh)" >&2
+exit "$fail"
