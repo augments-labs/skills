@@ -1,0 +1,25 @@
+name: Harness support or regression
+description: Request support for a new coding-agent harness or report a packaging/hook regression on an existing one.
+labels: ["enhancement"]
+body:
+  - type: input
+    id: harness
+    attributes:
+      label: Harness name, version, and docs URL
+      placeholder: e.g. Example CLI 2.1.0 — https://example.com/docs
+    validations:
+      required: true
+  - type: textarea
+    id: capabilities
+    attributes:
+      label: Skill discovery, hooks, and subagent capabilities
+      description: How the harness discovers Agent Skills (`SKILL.md`), whether it supports `PreToolUse`/`PostToolUse` hooks or standing rules, whether it honors `disable-model-invocation`, and what subagent tool (if any) it exposes.
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: What you tried or what regressed
+      description: Install command, smoke-test output, or clean-session behavior (redacted).
+    validations:
+      required: true

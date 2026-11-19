@@ -1,0 +1,113 @@
+name: validate
+
+# Deterministic validation for skills, hooks, plugin bundles, and offline eval
+# suites. No live LLM calls run in CI.
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+concurrency:
+  group: validate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Structural validation (frontmatter, limits, policy, plugin sync)
+        run: bash scripts/validate.sh --strict
+      - name: Context and token budgets
+        run: bash scripts/token-budget.sh --check
+      - name: Trigger collisions (per pack)
+        run: |
+          token=$(cat /proc/sys/kernel/random/uuid)
+          echo "::stop-commands::$token"
+          trap 'echo "::$token::"' EXIT
+          bash scripts/validate-trigger-collisions.sh --strict
+      - name: Offline deterministic test suites
+        run: |
+          fail=0
+          for t in tests/run-*.sh; do
+            [ -f "$t" ] || continue
+            [ "$(basename "$t")" = "run-plugin-smoke.sh" ] && continue
+            echo "=== $t ==="
+            bash "$t" || fail=1
+          done
+          exit "$fail"
+      - name: Eval harness offline check (fake-cli + syntax)
+        run: bash evals/bin/check
+
+  cross-platform-scripts:
+    # Portable shell scripts and hooks ship to user machines; test across OSes.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Cross-platform validator and hook checks
+        run: |
+          bash scripts/validate.sh --strict
+          if [ -f tests/run-engineering-hooks.sh ]; then
+            bash tests/run-engineering-hooks.sh
+          fi
+
+  reference-validator:
+    # Non-gating cross-check against the official Agent Skills reference parser.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Agent Skills reference validator
+        run: pip install skills-ref==0.1.1
+      - name: Cross-check promoted skills
+        run: |
+          token=$(cat /proc/sys/kernel/random/uuid)
+          echo "::stop-commands::$token"
+          trap 'echo "::$token::"' EXIT
+          {
+            echo "## Agent Skills reference validator cross-check"
+            echo
+            found=0
+            for dir in skills/*/*/; do
+              [ -f "${dir}SKILL.md" ] || continue
+              case "$dir" in
+                skills/in-progress/*|skills/deprecated/*) continue ;;
+                *[!a-z0-9/-]*) echo "- skipped: invalid directory name outside [a-z0-9/-]"; continue ;;
+              esac
+              found=1
+              if out=$(agentskills validate "$dir" 2>&1); then
+                echo "- valid: \`$dir\`"
+              else
+                echo "- differs: \`$dir\`"
+                echo
+                echo '````text'
+                printf '%s\n' "$out" | tr -d '`'
+                echo '````'
+              fi
+            done
+            [ "$found" -eq 1 ] || echo "- no promoted skills yet"
+          } | tee -a "$GITHUB_STEP_SUMMARY"

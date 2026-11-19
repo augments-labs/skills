@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# Offline eval harness check (no live LLM calls).
+# Dispatches syntax checks by shebang/extension and runs offline fake-cli suites.
+set -euo pipefail
+export LC_ALL=C
+
+errors=0
+check_script() {
+  local f="$1"
+  local first_line=""
+  IFS= read -r first_line < "$f" || true
+  case "$first_line:$f" in
+    *python*:*)
+      if command -v python3 >/dev/null 2>&1; then
+        python3 -m py_compile "$f" || { echo "FAIL: python syntax error in $f" >&2; errors=$((errors + 1)); }
+      fi
+      ;;
+    *bash*:*|*sh:*|*:*.sh)
+      bash -n "$f" || { echo "FAIL: bash syntax error in $f" >&2; errors=$((errors + 1)); }
+      ;;
+    *)
+      echo "WARN: skipping unknown script type: $f" >&2
+      ;;
+  esac
+}
+
+for f in scripts/*.sh evals/bin/*; do
+  [ -f "$f" ] || continue
+  check_script "$f"
+done
+
+if [ -d evals/lib/tests ]; then
+  for t in evals/lib/tests/*.sh; do
+    [ -f "$t" ] || continue
+    bash "$t" || { echo "FAIL: eval test failed: $t" >&2; errors=$((errors + 1)); }
+  done
+fi
+
+if [ "$errors" -gt 0 ]; then
+  exit 1
+fi
+
+echo "ok: evals/bin/check passed (offline syntax and available test suites)."

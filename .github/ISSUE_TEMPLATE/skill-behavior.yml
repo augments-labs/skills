@@ -1,0 +1,51 @@
+name: Skill behavior bug
+description: A skill failed to trigger, triggered falsely, caused bloat/loops, or led an agent to the wrong outcome.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Search open and closed issues first. Never paste secrets, tokens, or personal data — redact them by kind (e.g., `[token]`).
+  - type: input
+    id: skill
+    attributes:
+      label: Pack and skill
+      placeholder: e.g. engineering / changing-a-live-schema, or verifying failed to trigger
+    validations:
+      required: true
+  - type: textarea
+    id: prompt
+    attributes:
+      label: Exact prompt or trigger scenario
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: observed-vs-expected
+    attributes:
+      label: Observed vs expected behavior
+      description: What the agent actually did, what the skill asked for, and whether the same failure happens with the skill uninstalled.
+    validations:
+      required: true
+  - type: dropdown
+    id: evidence
+    attributes:
+      label: Evidence available
+      options:
+        - Eval record under evals/results/
+        - Redacted session transcript excerpt
+        - Observed in a session (no transcript kept)
+        - Reading of the skill text (contract gap)
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      value: |
+        - Repo version / commit:
+        - Harness + version:
+        - Model + exact id:
+        - OS + shell:
+    validations:
+      required: true

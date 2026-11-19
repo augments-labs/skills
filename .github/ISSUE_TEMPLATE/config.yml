@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://github.com/augments-labs/skills/blob/main/docs/README.md
+    about: Installing, per-harness notes, and pack guides.
+  - name: Contributing & Evals
+    url: https://github.com/augments-labs/skills/blob/main/CONTRIBUTING.md
+    about: How packs, staging in skills/in-progress, deterministic hooks, and 3-arm evals work.
+  - name: Security Policy
+    url: https://github.com/augments-labs/skills/blob/main/SECURITY.md
+    about: Private reporting for hook, script, or adapter security vulnerabilities.

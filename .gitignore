@@ -1,0 +1,24 @@
+# Local planning and working notes (never committed to public repo)
+.plans/
+
+# Local eval runs, workspaces, and raw transcripts (never committed)
+evals/workspaces/
+
+# Local secrets and virtual environments (never committed)
+.env
+.env.*
+.venv/
+venv/
+
+# OS & editor artifacts
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*.bak
+
+# Local scratch & worktrees
+.worktrees/
+node_modules/
+__pycache__/
+*.pyc

@@ -1,0 +1,19 @@
+{
+  "name": "augments-labs-skills",
+  "version": "0.0.0",
+  "description": "Eval-backed Agent Skills and deterministic hooks for coding agents, organized into domain packs.",
+  "type": "module",
+  "main": "index.js",
+  "homepage": "https://github.com/augments-labs/skills",
+  "repository": "https://github.com/augments-labs/skills",
+  "license": "MIT",
+  "keywords": [
+    "agent-skills",
+    "skills",
+    "engineering",
+    "tdd",
+    "debugging",
+    "code-review",
+    "hooks"
+  ]
+}

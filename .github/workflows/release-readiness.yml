@@ -1,0 +1,119 @@
+name: release-readiness
+
+# Enforces the branching and versioning contract (RELEASING.md):
+# - `main` accepts only same-repo `dev` (normal release) or `hotfix/*` PRs,
+#   and every PR into `main` must carry a version bump + CHANGELOG heading.
+# - Ordinary PRs into `dev` cannot bump versions or add CHANGELOG version
+#   headings (only same-repo `release/*`, `hotfix/*`, `backmerge/*`, or `main`).
+
+on:
+  pull_request:
+    branches: [main, dev]
+
+concurrency:
+  group: release-readiness-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  release-readiness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Enforce branch target, version-bump, and CHANGELOG rules
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_REF: ${{ github.head_ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          REPO: ${{ github.repository }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+
+          same_repo=0
+          [ "$HEAD_REPO" = "$REPO" ] && same_repo=1
+
+          # 1. `main` accepts only same-repo `dev` or `hotfix/*`.
+          if [ "$BASE_REF" = "main" ]; then
+            if [ "$same_repo" -ne 1 ]; then
+              echo "::error::PRs into main must originate from this repository (dev or hotfix/*). Target dev instead."
+              exit 1
+            fi
+            case "$HEAD_REF" in
+              dev|hotfix/*) ;;
+              *)
+                echo "::error::PRs into main must come from dev or hotfix/* (got '$HEAD_REF'). Target dev instead."
+                exit 1
+                ;;
+            esac
+          fi
+
+          # Use merge-base so branches cut before an earlier release never false-positive.
+          mb=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
+
+          # 2. Detect version changes across any version-bearing manifest.
+          bumped=0
+          version_files="package.json .claude-plugin/marketplace.json"
+          while IFS= read -r mf; do
+            [ -n "$mf" ] && version_files="$version_files $mf"
+          done < <(git ls-tree -r --name-only "$HEAD_SHA" -- plugins 2>/dev/null | grep -E '(plugin\.json|plugin\.yaml|package\.json)$' || true)
+
+          for f in $version_files; do
+            if git diff "$mb" "$HEAD_SHA" -- "$f" | grep -qE '^\+[[:space:]]*("version"[[:space:]]*:|version[[:space:]]*:)'; then
+              bumped=1
+              break
+            fi
+          done
+
+          # 3. Check whether a new version heading (`## [X.Y.Z]`) was added in CHANGELOG.md,
+          #    and verify it matches package.json when bumping.
+          pkg_ver=$(git show "$HEAD_SHA:package.json" | sed -n 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)
+          changelog_heading=0
+          if git diff "$mb" "$HEAD_SHA" -- CHANGELOG.md | grep -qE '^\+## \[[0-9]+\.[0-9]+\.[0-9]+'; then
+            changelog_heading=1
+          fi
+          exact_changelog_heading=0
+          if [ -n "$pkg_ver" ] && git show "$HEAD_SHA:CHANGELOG.md" | grep -qF "## [$pkg_ver]"; then
+            exact_changelog_heading=1
+          fi
+
+          # 4. Enforce branch-specific rules.
+          allowed_bump_on_dev=0
+          if [ "$same_repo" -eq 1 ]; then
+            case "$HEAD_REF" in
+              release/*|hotfix/*|backmerge/*|main) allowed_bump_on_dev=1 ;;
+            esac
+          fi
+
+          if [ "$BASE_REF" = "main" ]; then
+            if [ "$bumped" -ne 1 ]; then
+              echo "::error::Every release or hotfix PR into main must bump the version (see RELEASING.md)."
+              exit 1
+            fi
+            if [ "$changelog_heading" -ne 1 ] || [ "$exact_changelog_heading" -ne 1 ]; then
+              echo "::error::Version bumped to '$pkg_ver' for main without a matching '## [$pkg_ver]' heading in CHANGELOG.md."
+              exit 1
+            fi
+            echo "ok: release/hotfix PR '$HEAD_REF' -> main carries version $pkg_ver and matching CHANGELOG entry."
+          else
+            if [ "$bumped" -eq 1 ] && [ "$allowed_bump_on_dev" -ne 1 ]; then
+              echo "::error::Contribution PRs into dev must not bump versions (branch '$HEAD_REF'). See RELEASING.md."
+              exit 1
+            fi
+            if [ "$changelog_heading" -eq 1 ] && [ "$allowed_bump_on_dev" -ne 1 ]; then
+              echo "::error::Contribution PRs into dev must not add CHANGELOG.md version headings. See RELEASING.md."
+              exit 1
+            fi
+            if [ "$bumped" -eq 1 ] && { [ "$changelog_heading" -ne 1 ] || [ "$exact_changelog_heading" -ne 1 ]; }; then
+              echo "::error::Version bumped to '$pkg_ver' without adding a matching '## [$pkg_ver]' heading in CHANGELOG.md."
+              exit 1
+            fi
+            echo "ok: dev PR passes release-readiness."
+          fi
