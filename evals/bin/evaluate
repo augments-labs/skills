@@ -6,6 +6,10 @@
 # distilled (evals/<pack>/<name>/distilled/SKILL.md), none (no skill), and
 # old_skill (the skill at --base). Every arm installs a temporary skill-only
 # bundle into an isolated harness home, so hooks stay OFF in all of them.
+#
+# A case with a skill-triggering assertion asks the agent to write a skill:
+# after its session, evals/bin/triggering scores the skill the run wrote on
+# the assertion's queries, saved in <run>/triggering-<i>/ for grading.
 set -euo pipefail
 export LC_ALL=C
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
@@ -210,6 +214,15 @@ load_adapter "$harness" || exit 2
 n_cases="${#case_ids[@]}"
 sessions=$((n_cases * ${#arms[@]} * runs))
 to_run="${#work_items[@]}"
+# Triggering sessions for the skills the runs write, at most: a run that
+# writes no valid skill runs none.
+if [ "$resume_set" -eq 1 ]; then
+  trig_plan="$(for id in "${case_ids[@]}"; do cat "$ws/cases/$id.json"; done | jq -s . | evalkit trigger-plan "$case_dir" -)"
+else
+  trig_plan="$(evalkit trigger-plan "$case_dir" - <<< "$cases_json")"
+fi
+trig_sessions="$(printf '%s\n' "${work_items[@]+"${work_items[@]}"}" | cut -d'|' -f1 | jq -R . \
+  | jq -s --argjson p "$trig_plan" 'map(. as $id | [$p[] | select(.case == $id) | .sessions] | add // 0) | add // 0')"
 if [ "$resume_set" -eq 1 ]; then
   log "plan: resume $pack/$skill on $harness, mode=$mode, arms=${arms_csv}, runs=$runs, hooks OFF in every arm"
   [ "$runnable" = yes ] || log "  adapter: runnable=no ($runnable_reason)"
@@ -223,9 +236,12 @@ fi
 if [ "$followup_cases" -gt 0 ] && ! adapter_supports_followups; then
   log "  adapter: $harness cannot send follow-ups; $followup_cases case(s) with follow-ups run no session and count as indeterminate (followups_unsupported)"
 fi
+if [ "$trig_sessions" -gt 0 ]; then
+  log "  + up to $trig_sessions triggering session(s) scoring the skills the runs write"
+fi
 log "  worst-case wall time: $(( (to_run + jobs - 1) / jobs * timeout_s / 60 )) min at --timeout $timeout_s"
 if [ -n "${EVALS_COST_PER_SESSION:-}" ]; then
-  log "  estimated cost: $(awk -v n="$to_run" -v c="$EVALS_COST_PER_SESSION" 'BEGIN { printf "%.2f", n * c }')"
+  log "  estimated cost: $(awk -v n="$((to_run + trig_sessions))" -v c="$EVALS_COST_PER_SESSION" 'BEGIN { printf "%.2f", n * c }')"
 fi
 if [ "$dry_run" -eq 1 ]; then
   log "dry run: nothing was called"
@@ -303,6 +319,36 @@ fi
 
 now_s() { printf '%s\n' "${EPOCHREALTIME:-$(date +%s)}"; }
 
+# For each skill-triggering assertion of a case, scores the skill the run
+# wrote: evals/bin/triggering on its queries, saved in <run>/triggering-<i>/.
+# A missing or invalid skill writes invalid.txt (graded fail); a harness error
+# writes error.txt (graded needs_review). Prints "refusal" when a provider
+# refusal left a query unscored, so the slot is resumable.
+score_written_skills() { # $1 case file $2 run dir $3 work tree
+  local cf="$1" rd="$2" wd="$3" t i out dir trc refused=0 au=""
+  if [ "$allow_unverified" -eq 1 ]; then au=--allow-unverified; fi
+  while IFS= read -r t; do
+    i="$(jq -r .index <<< "$t")"; out="$rd/triggering-$i"
+    if ! dir="$(evalkit written-skill "$wd" "$(jq -r .path <<< "$t")" 2>&1)"; then
+      mkdir -p "$out"; printf '%s\n' "$dir" > "$out/invalid.txt"; continue
+    fi
+    trc=0
+    "$here/triggering" --pack "$pack" --skill-dir "$dir" --queries "$(jq -r .queries <<< "$t")" \
+      --harness "$harness" ${model:+--model "$model"} --runs "$(jq -r .runs <<< "$t")" \
+      --threshold "$(jq -r .threshold <<< "$t")" --out "$out" \
+      ${au:+"$au"} > "$rd/triggering-$i.log" 2>&1 || trc=$?
+    case "$trc" in
+      0|1) ;;
+      *) mkdir -p "$out"; printf 'evals/bin/triggering exited %s; see triggering-%s.log\n' "$trc" "$i" > "$out/error.txt" ;;
+    esac
+    if jq -e 'any(.[]; .verdict == "inconclusive")' "$out/query-results.json" >/dev/null 2>&1 \
+       && cat "$out"/q*/run-*/result.json 2>/dev/null | jq -se 'any(.[]; .reason == "refusal")' >/dev/null; then
+      refused=1
+    fi
+  done < <(evalkit trigger-plan "$case_dir" "$cf" | jq -c '.[]')
+  [ "$refused" -eq 0 ] || echo refusal
+}
+
 run_one() { # $1 case file $2 arm $3 run number
   local cf="$1" arm="$2" k="$3" id kind fixture rd base wd stream err rc=0 start end ran=0
   local chain reason="" outcome=completed bundle="" followups=""
@@ -335,6 +381,7 @@ run_one() { # $1 case file $2 arm $3 run number
   if [ -z "$reason" ] && ! lab_changed_files "$wd" seed > "$rd/changed-files.txt" 2>/dev/null; then
     reason=changed_files_unavailable
   fi
+  [ -n "$reason" ] || reason="$(score_written_skills "$cf" "$rd" "$wd")"
   [ -n "$reason" ] && outcome=indeterminate
   lab_extract_stream_text "$stream" "$harness" > "$rd/response.txt" 2>/dev/null || true
 

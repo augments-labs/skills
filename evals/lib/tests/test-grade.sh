@@ -44,6 +44,22 @@ reject "a null follow-up list" '{"evals":[{"id":"a","kind":"trap","prompt":"p","
 reject "an empty follow-up" '{"evals":[{"id":"a","kind":"trap","prompt":"p","followups":["next",""],"assertions":['"$A"']}]}' "followups[1]: a follow-up must be a non-empty string"
 reject "a blank follow-up" '{"evals":[{"id":"a","kind":"trap","prompt":"p","followups":["  "],"assertions":['"$A"']}]}' "followups[0]: a follow-up must be a non-empty string"
 reject "a follow-up that is not a string" '{"evals":[{"id":"a","kind":"trap","prompt":"p","followups":[1],"assertions":['"$A"']}]}' "followups[0]: a follow-up must be a non-empty string"
+printf '%s\n' '{"queries":[{"query":"a","should_trigger":true,"split":"train"},{"query":"b","should_trigger":false,"split":"validation"}]}' > "$cdir/q.json"
+printf '%s\n' '{"queries":[{"query":"a","should_trigger":true,"split":"train"}]}' > "$cdir/q-train-only.json"
+st() { printf '{"evals":[{"id":"a","kind":"trap","prompt":"p","assertions":[{"type":"skill-triggering",%s}]}]}' "$1"; }
+reject "a skill-triggering with no path" "$(st '"queries":"q.json"')" "path must be a non-empty string"
+reject "a skill-triggering path that escapes" "$(st '"path":"../x","queries":"q.json"')" "stay inside"
+reject "a skill-triggering with no queries" "$(st '"path":".agents/skills/*"')" "path must be a non-empty string"
+reject "a missing skill-triggering queries file" "$(st '"path":".agents/skills/*","queries":"nope.json"')" "queries file not found: nope.json"
+reject "an invalid skill-triggering queries file" "$(st '"path":".agents/skills/*","queries":"q-train-only.json"')" "q-train-only.json: an auto-triggered skill needs 'validation' queries"
+reject "a zero skill-triggering runs" "$(st '"path":".agents/skills/*","queries":"q.json","runs":0')" "'runs' must be a positive integer"
+reject "a skill-triggering threshold of 1" "$(st '"path":".agents/skills/*","queries":"q.json","threshold":1')" "'threshold' must be between 0 and 1"
+printf '%s\n' "$(st '"path":".agents/skills/*","queries":"q.json","runs":2')" > "$cdir/evals.json"
+check "accepts a skill-triggering assertion" q ek cases "$cdir/evals.json"
+jeq "trigger-plan counts queries x runs per assertion" <(ek trigger-plan "$cdir" - < <(ek cases "$cdir/evals.json")) \
+  '[.[] | [.case, .index, .path, .runs, .threshold, .sessions]]' '[["a",0,".agents/skills/*",2,0.5,4]]'
+eq "trigger-plan resolves the queries file in the case dir" "$cdir/q.json" "$(ek cases "$cdir/evals.json" | ek trigger-plan "$cdir" - | jq -r '.[0].queries')"
+eq "trigger-plan is empty for a case without one" "[]" "$(printf '%s' '{"id":"b","assertions":[{"type":"file-exists","path":"x"}]}' | ek trigger-plan "$cdir" - | jq -c .)"
 printf '%s\n' '{"evals":[{"id":"a","kind":"trap","prompt":"p","assertions":['"$A"']}]}' > "$cdir/evals.json"
 refute "rejects an unknown --only id" q ek cases "$cdir/evals.json" --only zzz
 
@@ -116,6 +132,65 @@ grade_one '{"type":"file-exists","path":"README.md"}' non_trigger '["*"]' > /dev
 jeq "a matching glob allows every file" "$rd/grading.json" '.controls.unrequested_files' '[]'
 grade_one '{"type":"file-exists","path":"README.md"}' trap > /dev/null
 jeq "trap cases never count unrequested files" "$rd/grading.json" '.controls.unrequested_files' '[]'
+
+# skill-triggering grades what evaluate saved in <run>/triggering-<i>/.
+ST='{"type":"skill-triggering","path":".agents/skills/*","queries":"q.json"}'
+td="$rd/triggering-0"
+qrow() { jq -nc --argjson t "$1" --arg v "$2" '{should_trigger: $t, verdict: $v}'; }
+results() { mkdir -p "$td"; jq -s . > "$td/query-results.json"; }
+detail_one() { jq -r '.assertion_results[0].detail' "$rd/grading.json"; }
+rm -rf "$td"
+eq "skill-triggering with nothing saved needs review" needs_review "$(grade_one "$ST")"
+{ qrow true pass; qrow true pass; qrow false pass; } | results
+eq "skill-triggering passes when every query passes" pass "$(grade_one "$ST")"
+eq "skill-triggering details both sides" "should-trigger 2/2, should-not 1/1" "$(detail_one)"
+{ qrow true pass; qrow true fail; qrow false pass; } | results
+eq "a missed should-trigger query fails" fail "$(grade_one "$ST")"
+eq "the detail counts the miss" "should-trigger 1/2, should-not 1/1" "$(detail_one)"
+{ qrow true pass; qrow false fail; } | results
+eq "a should-not query that loads fails" fail "$(grade_one "$ST")"
+{ qrow true pass; qrow true inconclusive; qrow false fail; } | results
+eq "an inconclusive query needs review" needs_review "$(grade_one "$ST")"
+eq "the detail counts inconclusive queries" "should-trigger 1/2, should-not 0/1, 1 inconclusive" "$(detail_one)"
+printf 'expected one skill at .agents/skills/*/SKILL.md, found 0\n' > "$td/invalid.txt"
+eq "no written skill fails" fail "$(grade_one "$ST")"
+eq "the detail says why" "expected one skill at .agents/skills/*/SKILL.md, found 0" "$(detail_one)"
+rm -f "$td/invalid.txt"; printf 'evals/bin/triggering exited 2\n' > "$td/error.txt"
+eq "a triggering error needs review" needs_review "$(grade_one "$ST")"
+rm -rf "$td"
+jq -n --argjson a "$ST" '{id: "x", kind: "trap", prompt: "p", assertions: [{type: "file-exists", path: "README.md"}, $a]}' > "$rd/case.json"
+mkdir -p "$rd/triggering-1"; qrow true pass | jq -s . > "$rd/triggering-1/query-results.json"
+"$TL_EVALS/bin/grade" "$rd" "$rd/case.json" "$cdir" > /dev/null 2>&1
+jeq "each assertion reads its own triggering-<index>" "$rd/grading.json" '[.assertion_results[].status]' '["pass","pass"]'
+rm -rf "$rd/triggering-1"
+
+# written-skill: the one valid skill a run wrote under a glob.
+sw="$TL_TMP/written-work"
+mkdir -p "$sw"
+eq "no written skill is reported" "expected one skill at .agents/skills/*/SKILL.md, found 0" "$(ek written-skill "$sw" '.agents/skills/*')"
+refute "no written skill exits 1" q ek written-skill "$sw" '.agents/skills/*'
+mkdir -p "$sw/.agents/skills/gadget-helper"
+printf -- '---\nname: gadget-helper\ndescription: "Use when renaming a gadget."\n---\n' > "$sw/.agents/skills/gadget-helper/SKILL.md"
+eq "one valid skill prints its directory" "$(cd "$sw" && pwd -P)/.agents/skills/gadget-helper" "$(ek written-skill "$sw" '.agents/skills/*')"
+mkdir -p "$sw/.agents/skills/other"
+printf -- '---\nname: other\ndescription: "Use when."\n---\n' > "$sw/.agents/skills/other/SKILL.md"
+eq "two written skills are reported" "expected one skill at .agents/skills/*/SKILL.md, found 2: .agents/skills/gadget-helper, .agents/skills/other" \
+  "$(ek written-skill "$sw" '.agents/skills/*')"
+rm -rf "$sw/.agents/skills/other"
+sed -i 's/^name: .*/name: gadget-helpers/' "$sw/.agents/skills/gadget-helper/SKILL.md"
+eq "a name that differs from its directory is reported" ".agents/skills/gadget-helper: name 'gadget-helpers' does not match its directory 'gadget-helper'" \
+  "$(ek written-skill "$sw" '.agents/skills/*')"
+sed -i 's/^name: .*/name: Gadget_Helper/' "$sw/.agents/skills/gadget-helper/SKILL.md"
+eq "an invalid name is reported" ".agents/skills/gadget-helper: name 'Gadget_Helper' is not a valid skill name" "$(ek written-skill "$sw" '.agents/skills/*')"
+printf -- '---\nname: gadget-helper\n---\n' > "$sw/.agents/skills/gadget-helper/SKILL.md"
+eq "a skill with no description is reported" ".agents/skills/gadget-helper/SKILL.md: no description in frontmatter" "$(ek written-skill "$sw" '.agents/skills/*')"
+printf 'no frontmatter\n' > "$sw/.agents/skills/gadget-helper/SKILL.md"
+eq "a skill with no frontmatter is reported" ".agents/skills/gadget-helper/SKILL.md: missing YAML frontmatter" "$(ek written-skill "$sw" '.agents/skills/*')"
+rm -rf "$sw/.agents"; mkdir -p "$sw/.agents/skills"
+ln -s "$(cd "$sw" && pwd -P)/../written-elsewhere" "$sw/.agents/skills/escape"
+mkdir -p "$TL_TMP/written-elsewhere"
+printf -- '---\nname: escape\ndescription: "Use when."\n---\n' > "$TL_TMP/written-elsewhere/SKILL.md"
+refute "a written skill outside the work tree is refused" q ek written-skill "$sw" '.agents/skills/*'
 
 # Outcomes: any needs_review wins, then any fail.
 jq -n '{id: "x", kind: "trap", prompt: "p", assertions: [
