@@ -73,15 +73,15 @@ Every promoted skill body under `skills/engineering/` is capped at 200 lines, 2,
 | --- | --- | --- | --- |
 | Auto-triggered descriptions (1801 chars) | 3 | n/a | 451 |
 | User-invoked descriptions (0 chars) | 0 | n/a | 0 |
-| Promoted skill bodies (if all loaded) | 3 | 3020 | 4375 |
+| Promoted skill bodies (if all loaded) | 3 | 3047 | 4414 |
 <!-- token-budget-table:end -->
 
 <!-- eval-scoreboard:start -->
 | Skill | Arm shipped | Pass rate (`shipped` vs `none`) | Control delta (non-trigger / small fix) | Token delta | Model & date | Record |
 | --- | --- | --- | --- | --- | --- | --- |
-| `engineering/debugging` | `full` | 100% vs 59% | +0.5 calls / +0 calls, +0 turns | +254.0 output (small fix) | claude-haiku-5-5, 2026-11-21 | [2026-11-21-engineering-debugging-claude-code-claude-haiku-5-5](evals/results/2026-11-21-engineering-debugging-claude-code-claude-haiku-5-5/benchmark.json) |
-| `engineering/debugging` | `full` | 93% vs 100% | +0 calls / -1.5 calls, -1.5 turns | -488.0 output (small fix) | claude-opus-5-5, 2026-11-21 | [2026-11-21-engineering-debugging-claude-code-claude-opus-5-5](evals/results/2026-11-21-engineering-debugging-claude-code-claude-opus-5-5/benchmark.json) |
-| `engineering/debugging` | `full` | 100% vs 85% | +0.0 calls / +0.0 calls, +0.0 turns | -16 output (small fix) | claude-sonnet-5-5, 2026-11-21 | [2026-11-21-engineering-debugging-claude-code](evals/results/2026-11-21-engineering-debugging-claude-code/benchmark.json) |
+| `engineering/debugging` | `full` | 93% vs 78% | +0.5 calls / +0.0 calls, +0.0 turns | +101.5 output (small fix) | claude-haiku-5-5, 2026-11-21 | [2026-11-21-engineering-debugging-claude-code-claude-haiku-5-5-2](evals/results/2026-11-21-engineering-debugging-claude-code-claude-haiku-5-5-2/benchmark.json) |
+| `engineering/debugging` | `full` | 100% vs 96% | +0 calls / -1 calls, -1 turns | -262.0 output (small fix) | claude-opus-5-5, 2026-11-21 | [2026-11-21-engineering-debugging-claude-code-claude-opus-5-5-2](evals/results/2026-11-21-engineering-debugging-claude-code-claude-opus-5-5-2/benchmark.json) |
+| `engineering/debugging` | `full` | 100% vs 89% | -0.5 calls / +0 calls, +0 turns | +50 output (small fix) | claude-sonnet-5-5, 2026-11-21 | [2026-11-21-engineering-debugging-claude-code-claude-sonnet-5-5](evals/results/2026-11-21-engineering-debugging-claude-code-claude-sonnet-5-5/benchmark.json) |
 | `engineering/test-driven-development` | `full` | 100% vs 57% | +0 calls / +0 calls, +0 turns | +170 output (small fix) | claude-haiku-5-5, 2026-11-21 | [2026-11-21-engineering-test-driven-development-claude-code-claude-haiku-5-5](evals/results/2026-11-21-engineering-test-driven-development-claude-code-claude-haiku-5-5/benchmark.json) |
 | `engineering/test-driven-development` | `full` | 100% vs 81% | -0.5 calls / +0 calls, +0 turns | -137 output (small fix) | claude-opus-5-5, 2026-11-21 | [2026-11-21-engineering-test-driven-development-claude-code-claude-opus-5-5](evals/results/2026-11-21-engineering-test-driven-development-claude-code-claude-opus-5-5/benchmark.json) |
 | `engineering/test-driven-development` | `full` | 100% vs 38% | +0.0 calls / -1.5 calls, -1.5 turns | -168.5 output (small fix) | claude-sonnet-5-5, 2026-11-21 | [2026-11-21-engineering-test-driven-development-claude-code-claude-sonnet-5-5](evals/results/2026-11-21-engineering-test-driven-development-claude-code-claude-sonnet-5-5/benchmark.json) |

@@ -85,7 +85,9 @@ and the suite stays green while production breaks.
 1. If the user asked only for a diagnosis, report the cause and the evidence,
    and stop.
 2. Fix the layer where the cause lives. A data, permission, or infrastructure
-   problem needs that fix, not a code workaround.
+   problem needs that fix, not a code workaround, unless the request asks for
+   code that handles that input. Then write that code, keep it to the inputs
+   that fail today, and report the upstream cause.
 3. Turn the reproduction into a regression test that fails before the fix and
    passes after it.
 4. Search for every other site with the same cause: copies of the code,
