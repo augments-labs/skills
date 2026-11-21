@@ -21,6 +21,7 @@ Usage: evals/bin/evaluate --pack PACK --skill NAME [options]
   --arms LIST          full,distilled,none (default); full,old_skill for an edit
   --base COMMIT        commit holding the old skill (required with old_skill)
   --runs N             runs per case per arm (default 3)
+  --jobs N             sessions in parallel (default 1)
   --eval IDS           only these case ids (comma-separated)
   --model NAME         model passed to the harness (default: the harness default)
   --shipped-arm ARM    record this shipped arm (full|distilled) instead of the decision table
@@ -34,7 +35,7 @@ Set EVALS_COST_PER_SESSION (a number) to price the plan in your currency.
 EOF
 }
 
-pack="" skill="" harness=claude-code arms_csv=full,distilled,none base="" runs=3 only=""
+pack="" skill="" harness=claude-code arms_csv=full,distilled,none base="" runs=3 jobs=1 only=""
 model="" shipped_flag="" timeout_s=900 out="" keep=0 allow_unverified=0 dry_run=0
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -44,6 +45,7 @@ while [ "$#" -gt 0 ]; do
     --arms) arms_csv="${2:-}"; shift 2 ;;
     --base) base="${2:-}"; shift 2 ;;
     --runs) runs="${2:-}"; shift 2 ;;
+    --jobs) jobs="${2:-}"; shift 2 ;;
     --eval) only="${2:-}"; shift 2 ;;
     --model) model="${2:-}"; shift 2 ;;
     --shipped-arm) shipped_flag="${2:-}"; shift 2 ;;
@@ -60,6 +62,7 @@ done
 require_tool git python3 jq || exit 2
 [ -n "$pack" ] && [ -n "$skill" ] || { usage >&2; die "--pack and --skill are required"; }
 case "$runs" in ''|0*|*[!0-9]*) die "--runs must be a positive integer" ;; esac
+case "$jobs" in ''|0*|*[!0-9]*) die "--jobs must be a positive integer" ;; esac
 case "$timeout_s" in ''|0*|*[!0-9]*) die "--timeout must be a positive integer" ;; esac
 case "$shipped_flag" in ''|full|distilled) ;; *) die "--shipped-arm must be full or distilled" ;; esac
 
@@ -111,8 +114,8 @@ sessions=$((n_cases * ${#arms[@]} * runs))
 log "plan: $pack/$skill on $harness, mode=$mode, arms=${arms_csv}, runs=$runs, hooks OFF in every arm"
 [ "$runnable" = yes ] || log "  adapter: runnable=no ($runnable_reason)"
 jq -r '.[] | "  case \(.id) (\(.kind))"' <<< "$cases_json" >&2
-log "  $n_cases case(s) x ${#arms[@]} arm(s) x $runs run(s) = $sessions agent session(s)"
-log "  worst-case wall time: $((sessions * timeout_s / 60)) min at --timeout $timeout_s"
+log "  $n_cases case(s) x ${#arms[@]} arm(s) x $runs run(s) = $sessions agent session(s), $jobs at a time"
+log "  worst-case wall time: $(( (sessions + jobs - 1) / jobs * timeout_s / 60 )) min at --timeout $timeout_s"
 if [ -n "${EVALS_COST_PER_SESSION:-}" ]; then
   log "  estimated cost: $(awk -v n="$sessions" -v c="$EVALS_COST_PER_SESSION" 'BEGIN { printf "%.2f", n * c }')"
 fi
@@ -132,10 +135,32 @@ ws="${out:-${EVALS_WORKSPACE:-$repo/evals/workspaces}/$stamp-$pack-$skill-$harne
 mkdir -p "$ws/cases" "$ws/bundles" "$ws/runs"
 ws="$(cd "$ws" && pwd -P)"
 run_base="$(mktemp -d "${TMPDIR:-/tmp}/augments-evals-$(basename "$ws").XXXXXX")" || die "cannot create a run directory"
-# Homes hold credential copies: remove every one on any exit.
-cleanup_homes() { [ -d "$run_base" ] && find "$run_base" -type d -name home -prune -exec rm -rf {} + 2>/dev/null; return 0; }
-trap cleanup_homes EXIT
-trap 'exit 130' INT TERM
+# Homes hold credential copies: stop active workers and remove every home on any exit.
+active_pids=()
+done_dir=""
+cleanup_run() {
+  trap - INT TERM
+  local entry pid slot_id
+  for entry in "${active_pids[@]+"${active_pids[@]}"}"; do
+    pid="${entry%%:*}"
+    slot_id="${entry#*:}"
+    if [ -z "$done_dir" ] || [ ! -f "$done_dir/$slot_id" ]; then
+      stop_tree "$pid"
+    fi
+  done
+  for entry in "${active_pids[@]+"${active_pids[@]}"}"; do
+    wait "${entry%%:*}" 2>/dev/null || true
+  done
+  if [ -d "${run_base:-}" ]; then
+    find "$run_base" -type d -name home -prune -exec rm -rf {} + 2>/dev/null || true
+    [ -n "$done_dir" ] && rm -rf "$done_dir" 2>/dev/null || true
+    [ "${keep:-0}" -eq 1 ] || rm -rf "$run_base" 2>/dev/null || true
+  fi
+  return 0
+}
+trap cleanup_run EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 jq -n --arg pack "$pack" --arg skill "$skill" --arg mode "$mode" --arg harness "$harness" \
   --arg hv "$harness_version" --arg model "$model" --argjson runs "$runs" --arg shipped "$shipped_flag" \
@@ -206,7 +231,11 @@ run_one() { # $1 case file $2 arm $3 run number
 
   local graded
   graded="$("$here/grade" "$rd" "$cf" "$case_dir")" || graded="grading failed (run counted as indeterminate)"
-  log "  -> $graded${reason:+ ($reason)}"
+  if [ "$jobs" -gt 1 ]; then
+    log "done: $id [$kind] arm=$arm run=$k -> $graded${reason:+ ($reason)}"
+  else
+    log "  -> $graded${reason:+ ($reason)}"
+  fi
   if [ -d "$wd/.git" ]; then
     ( cd "$wd" && git add -A >/dev/null 2>&1 && git diff --cached --binary seed > "$rd/diff.patch" 2>/dev/null ) || true
   fi
@@ -219,13 +248,68 @@ while IFS= read -r c; do
   printf '%s\n' "$c" > "$ws/cases/$id.json"
   case_ids+=("$id")
 done < <(jq -c '.[]' <<< "$cases_json")
-for id in "${case_ids[@]}"; do
-  for a in "${arms[@]}"; do
-    for k in $(seq 1 "$runs"); do
-      run_one "$ws/cases/$id.json" "$a" "$k"
+
+if [ "$jobs" -eq 1 ]; then
+  for id in "${case_ids[@]}"; do
+    for a in "${arms[@]}"; do
+      for k in $(seq 1 "$runs"); do
+        run_one "$ws/cases/$id.json" "$a" "$k"
+      done
     done
   done
-done
+else
+  done_dir="$run_base/done"
+  mkdir -p "$done_dir"
+  have_wait_n=0
+  if [ "${BASH_VERSINFO[0]:-0}" -gt 4 ] \
+     || { [ "${BASH_VERSINFO[0]:-0}" -eq 4 ] && [ "${BASH_VERSINFO[1]:-0}" -ge 3 ]; }; then
+    have_wait_n=1
+  fi
+  reap_finished() {
+    local alive=() entry pid slot_id
+    for entry in "${active_pids[@]+"${active_pids[@]}"}"; do
+      pid="${entry%%:*}"
+      slot_id="${entry#*:}"
+      if [ -f "$done_dir/$slot_id" ] || ! kill -0 "$pid" 2>/dev/null; then
+        wait "$pid" 2>/dev/null || true
+        rm -f "$done_dir/$slot_id"
+      else
+        alive+=("$pid:$slot_id")
+      fi
+    done
+    active_pids=("${alive[@]+"${alive[@]}"}")
+  }
+  slot=0
+  for id in "${case_ids[@]}"; do
+    for a in "${arms[@]}"; do
+      for k in $(seq 1 "$runs"); do
+        while [ "${#active_pids[@]}" -ge "$jobs" ]; do
+          reap_finished
+          [ "${#active_pids[@]}" -ge "$jobs" ] || break
+          if [ "$have_wait_n" -eq 1 ]; then
+            wait -n 2>/dev/null || true
+          else
+            sleep 0.1
+          fi
+          reap_finished
+        done
+        slot=$((slot + 1))
+        _eval_done_marker="$done_dir/$slot"
+        (
+          trap - EXIT INT TERM
+          trap ': > "$_eval_done_marker"' EXIT
+          run_one "$ws/cases/$id.json" "$a" "$k"
+        ) &
+        active_pids+=("$!:$slot")
+      done
+    done
+  done
+  for entry in "${active_pids[@]+"${active_pids[@]}"}"; do
+    wait "${entry%%:*}" 2>/dev/null || true
+  done
+  active_pids=()
+  rm -rf "$done_dir"
+fi
 
 jq --arg f "$(utc_now)" '.finished_at = $f' "$ws/plan.json" > "$ws/plan.json.tmp" && mv "$ws/plan.json.tmp" "$ws/plan.json"
 "$here/benchmark" "$ws" >/dev/null

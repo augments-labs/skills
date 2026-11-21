@@ -27,8 +27,8 @@ A skill resolves from `skills/<pack>/<name>/` or, if not found there, from `skil
 ```
 evals/bin/evaluate --pack PACK --skill NAME [--harness claude-code|codex|antigravity]
     [--arms full,distilled,none | --arms full,old_skill,none --base COMMIT] [--runs 3]
-    [--eval IDS] [--model NAME] [--shipped-arm full|distilled] [--timeout 900]
-    [--out DIR] [--keep-workdirs] [--allow-unverified] [--dry-run]
+    [--jobs 1] [--eval IDS] [--model NAME] [--shipped-arm full|distilled]
+    [--timeout 900] [--out DIR] [--keep-workdirs] [--allow-unverified] [--dry-run]
 
 evals/bin/triggering --pack PACK --skill NAME [--harness ...] [--runs 3]
     [--splits train,validation,holdout,negative] [--threshold 0.5] [--jobs 3]
