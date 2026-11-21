@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "name": "engineering-skills",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Engineering constraints, verification, production-safety skills, and deterministic hooks for coding agents.",
   "compat": {
     "source": "native",
