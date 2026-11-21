@@ -71,13 +71,15 @@ Every promoted skill body under `skills/engineering/` is capped at 200 lines, 2,
 <!-- token-budget-table:start -->
 | Surface (`engineering-skills`) | Skills | Words | Approx tokens |
 | --- | --- | --- | --- |
-| Pre-release skeleton (no promoted skills yet) | 0 | 0 | 0 |
+| Auto-triggered descriptions (657 chars) | 1 | n/a | 165 |
+| User-invoked descriptions (0 chars) | 0 | n/a | 0 |
+| Promoted skill bodies (if all loaded) | 1 | 1132 | 1648 |
 <!-- token-budget-table:end -->
 
 <!-- eval-scoreboard:start -->
 | Skill | Arm shipped | Pass rate (`shipped` vs `none`) | Control delta (non-trigger / small fix) | Token delta | Model & date | Record |
 | --- | --- | --- | --- | --- | --- | --- |
-| *(Pending first evaluated promotion for `v0.0.1`)* | n/a | n/a | n/a | n/a | n/a | n/a |
+| `engineering/debugging` | `full` | 100% vs 85% | +0.0 calls / +0.0 calls, +0.0 turns | -16 output (small fix) | claude-sonnet-5-5, 2026-11-21 | [2026-11-21-engineering-debugging-claude-code](evals/results/2026-11-21-engineering-debugging-claude-code/benchmark.json) |
 <!-- eval-scoreboard:end -->
 
 ## Installation

@@ -8,3 +8,6 @@ All notable changes to `augments-labs/skills` are documented here. Entries follo
 
 - Initial repository skeleton, multi-pack architecture, and eval-first
   governance in preparation for `v0.0.1`.
+- `debugging` skill in the engineering pack: proves a bug's root cause with a
+  runnable signal before patching, checks test doubles against the real
+  implementation, and reverts earlier failed fixes before diagnosing.
