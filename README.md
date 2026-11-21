@@ -58,7 +58,7 @@ Skills live under `skills/<pack>/` and ship as self-contained plugin bundles und
 
 | Pack | Plugin address | Status | Focus |
 | --- | --- | --- | --- |
-| **Engineering** (`skills/engineering/`) | `engineering-skills@augments-labs` | Pre-release (`0.0.0`, building toward `v0.0.1`) | Eval-backed engineering constraints, verification, debugging, production-safety, and project-local checks |
+| **Engineering** (`skills/engineering/`) | `engineering-skills@augments-labs` | Pre-1.0 (`0.0.1`) | Eval-backed engineering constraints, verification, debugging, production-safety, and project-local checks |
 | **Staging** (`skills/in-progress/`) | *(not bundled)* | Experimental | Candidate skills undergoing 3-arm and triggering evaluation before promotion |
 | **Retired** (`skills/deprecated/`) | *(not bundled)* | Archived | Skills retired once frontier models close the gap |
 
@@ -84,7 +84,7 @@ Every promoted skill body under `skills/engineering/` is capped at 200 lines, 2,
 
 ## Installation
 
-> **Pre-release notice (`0.0.0`):** This repository is still pre-release scaffolding. Installable plugin bundles under `plugins/engineering-skills/` will ship starting with `v0.0.1`, once the first skill and hooks pass evaluation.
+> **Pre-1.0 notice (`0.0.1`):** The `engineering-skills` plugin ships one evaluated skill (`debugging`) and two hooks (`guard-destructive-git`, `guard-protected-branch`). More skills ship as they pass evaluation, and pre-1.0 releases may change the pack's surface.
 
 ### Claude Code
 
@@ -107,19 +107,6 @@ codex plugin add engineering-skills@augments-labs
 agy plugin install https://github.com/augments-labs/skills/tree/main/plugins/engineering-skills
 ```
 
-### Cursor
-
-```bash
-git clone https://github.com/augments-labs/skills.git /tmp/augments-skills
-cp -R /tmp/augments-skills/plugins/engineering-skills ~/.cursor/plugins/local/engineering-skills
-```
-
-### Devin
-
-```bash
-devin plugins install augments-labs/skills#plugins/engineering-skills
-```
-
 ### Skill-only install (`npx skills`)
 
 ```bash
@@ -128,9 +115,9 @@ npx skills add augments-labs/skills/plugins/engineering-skills
 
 > Note: `npx skills add` installs `SKILL.md` files only, without deterministic hooks. For hook enforcement, install through your harness's plugin mechanism above. [`docs/hooks.md`](docs/hooks.md) lists what the hooks block and how to turn them off.
 
-### Additional harnesses (OpenCode, pi, Kimi Code, Hermes, Grok Build, Muse Code)
+### Other harnesses
 
-Support for OpenCode (1.x/2.x), pi, Kimi Code, Hermes, Grok Build, and Muse Code will be documented in [`docs/`](docs/README.md), with verified install commands, as each harness adapter passes live smoke tests. On Hermes, answer "no" if you are prompted about `package.json` Node dependencies. Zero dependencies are required. Harnesses that install from the repository root load `engineering-skills` by default.
+Native plugin bundles for Cursor, Devin, OpenCode, pi, Kimi Code, Hermes, Grok Build, and Muse Code are planned for the next release. Until then, use the skill-only install above on harnesses that read Agent Skills.
 
 ## Documentation
 
