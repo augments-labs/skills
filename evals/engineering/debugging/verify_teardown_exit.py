@@ -48,8 +48,17 @@ if not re.search(r"tests[./]cleanup", script):
 rc, out = run(["bash", "test.sh"], root)
 if rc != 0:
     fail(f"bash test.sh exited {rc}")
-if not re.search(r"\b8 passed\b", out):
-    fail("bash test.sh does not report 8 passed tests")
+# The 8 original tests must all run and pass. A regression test the fix adds
+# raises the count, so read the counts instead of matching "8 passed".
+m = re.search(r"\b(\d+) passed, (\d+) failed, (\d+) skipped\b", out)
+if not m:
+    fail("bash test.sh does not report its test counts")
+passed, failed, skipped = map(int, m.groups())
+if failed or skipped or passed < 8:
+    fail(f"bash test.sh reports {passed} passed, {failed} failed, {skipped} skipped; "
+         "the 8 original tests must all run and pass")
+if not re.search(r"^test_concurrent_append \(.*\) \.\.\. ok$", out, re.M):
+    fail("bash test.sh no longer runs test_concurrent_append")
 if (root / ".test-tmp").exists():
     fail(".test-tmp/ is left behind after bash test.sh")
 
