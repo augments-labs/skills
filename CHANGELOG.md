@@ -6,6 +6,11 @@ All notable changes to `augments-labs/skills` are documented here. Entries follo
 
 ## [Unreleased]
 
+- `writing-skills` skill in the engineering pack: writes skills that load, with
+  descriptions that name the situations people report, keeps every guard when
+  trimming a skill, and calibrates a project skill's check script against the
+  failures it must catch.
+
 ## [0.1.0] - 2026-11-21
 
 - `engineering-skills` now installs on OpenCode 2.x, pi, Grok Build, Hermes,

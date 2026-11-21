@@ -1,0 +1,173 @@
+{
+  "schema_version": 1,
+  "pack": "engineering",
+  "skill": "writing-skills",
+  "mode": "promotion",
+  "shipped_arm": "full",
+  "measured_at": "2026-11-21T19:52:09Z",
+  "harness": "claude-code",
+  "harness_version": "2.1.330 (Claude Code)",
+  "model": "claude-opus-5-5",
+  "runs_per_eval": 3,
+  "hooks_enabled": false,
+  "arms": {
+    "full": {
+      "commit": "8294012254fb16c8fd2a014dbd58ee59211f734f",
+      "skill_tree": "4b450755729beb187814e51cd6ea7e08cf22c342"
+    },
+    "none": null
+  },
+  "run_summary": {
+    "full": {
+      "pass_rate": 1.0,
+      "scored_runs": 12,
+      "indeterminate_count": 0,
+      "needs_review_count": 0,
+      "mean_output_tokens": 4156.9,
+      "mean_time_seconds": 39.2,
+      "control_non_trigger": {
+        "skill_loads": 0,
+        "unrequested_files": 0,
+        "median_tool_calls": 6
+      },
+      "control_small_fix": {
+        "pass_rate": 1.0,
+        "median_output_tokens": 624,
+        "median_tool_calls": 3,
+        "median_turns": 4
+      }
+    },
+    "none": {
+      "pass_rate": 0.9167,
+      "scored_runs": 12,
+      "indeterminate_count": 0,
+      "needs_review_count": 0,
+      "mean_output_tokens": 4210.9,
+      "mean_time_seconds": 38.9,
+      "control_non_trigger": {
+        "skill_loads": 0,
+        "unrequested_files": 0,
+        "median_tool_calls": 6
+      },
+      "control_small_fix": {
+        "pass_rate": 1.0,
+        "median_output_tokens": 516,
+        "median_tool_calls": 3,
+        "median_turns": 4
+      }
+    }
+  },
+  "evals": [
+    {
+      "id": "migration-check-skill",
+      "kind": "trap",
+      "arms": {
+        "full": {
+          "scored_runs": 3,
+          "passed": 3,
+          "indeterminate": 0,
+          "needs_review": 0
+        },
+        "none": {
+          "scored_runs": 3,
+          "passed": 2,
+          "indeterminate": 0,
+          "needs_review": 0
+        }
+      }
+    },
+    {
+      "id": "trim-deploying-skill",
+      "kind": "trap",
+      "arms": {
+        "full": {
+          "scored_runs": 3,
+          "passed": 3,
+          "indeterminate": 0,
+          "needs_review": 0
+        },
+        "none": {
+          "scored_runs": 3,
+          "passed": 3,
+          "indeterminate": 0,
+          "needs_review": 0
+        }
+      }
+    },
+    {
+      "id": "fix-unloaded-skill",
+      "kind": "trap",
+      "arms": {
+        "full": {
+          "scored_runs": 3,
+          "passed": 3,
+          "indeterminate": 0,
+          "needs_review": 0
+        },
+        "none": {
+          "scored_runs": 3,
+          "passed": 3,
+          "indeterminate": 0,
+          "needs_review": 0
+        }
+      }
+    },
+    {
+      "id": "player-skill-dedupe",
+      "kind": "non_trigger",
+      "arms": {
+        "full": {
+          "scored_runs": 3,
+          "passed": 3,
+          "indeterminate": 0,
+          "needs_review": 0
+        },
+        "none": {
+          "scored_runs": 3,
+          "passed": 3,
+          "indeterminate": 0,
+          "needs_review": 0
+        }
+      }
+    },
+    {
+      "id": "deploying-typo",
+      "kind": "small_fix",
+      "arms": {
+        "full": {
+          "scored_runs": 3,
+          "passed": 3,
+          "indeterminate": 0,
+          "needs_review": 0
+        },
+        "none": {
+          "scored_runs": 3,
+          "passed": 3,
+          "indeterminate": 0,
+          "needs_review": 0
+        }
+      }
+    },
+    {
+      "id": "runbook-to-skill",
+      "kind": "trap",
+      "arms": {
+        "full": {
+          "scored_runs": 3,
+          "passed": 3,
+          "indeterminate": 0,
+          "needs_review": 0
+        },
+        "none": {
+          "scored_runs": 3,
+          "passed": 3,
+          "indeterminate": 0,
+          "needs_review": 0
+        }
+      }
+    }
+  ],
+  "deltas": {
+    "full_vs_none": 0.0833
+  }
+}
