@@ -140,9 +140,7 @@ hook schema.
 | Claude Code | `.claude-plugin/marketplace.json` -> `plugins/<plugin>/` | Strict `marketplace.json` owner schema (`name`, optional `email`, no `url`); discovers `skills/` and `hooks/hooks.json` at the plugin root; `PreToolUse`/`PostToolUse` hooks |
 | Codex CLI | `.agents/plugins/marketplace.json` -> `plugins/<plugin>/` | Manifest names component paths (`skills`, `hooks` -> `hooks/codex-hooks.json`); installs into `$CODEX_HOME/plugins/cache/`; edits use `apply_patch` |
 | Antigravity | `plugins/<plugin>/.antigravity-plugin/plugin.json` | Reads components from the plugin root only: hooks from root `hooks.json` (one named entry per hook; commands run in the plugin folder, and older builds do not set `${PLUGIN_ROOT}`), never `.antigravity-plugin/rules/` or `hooks/hooks.json`; check with `agy plugin validate --json` |
-| Cursor | `plugins/<plugin>/.cursor-plugin/plugin.json` | Installed by copying the bundle into `~/.cursor/plugins/local/<plugin>/` (links pointing outside it are rejected); without a `hooks` field it would load `hooks/hooks.json`, so the manifest sets `"hooks": {}`; auto-loads any `rules/` at the plugin root; every CLI command, including the smoke driver's, needs a signed-in account |
-| Devin | `plugins/<plugin>/.devin-plugin/plugin.json` | Finds `skills/` by convention; loads `hooks/hooks.json` and root `hooks.json` with its own tool names (`exec`/`edit`/`write`), so the hook adapter allows every call when `DEVIN_PROJECT_DIR` is set; loads `AGENTS.md` and `rules/` at the plugin root as rules (`validate.sh` rejects them); `plugins install` needs a signed-in account |
-| OpenCode (1.x/2.x) | Root `index.js` -> `plugins/<plugin>/index.js` (from `scripts/templates/opencode-index.js`) | 2.x installs Git or npm specifiers only (`plugin add git+https://...`), reads the default export's `id`, and calls `setup(ctx)`; 1.x calls every exported function as a plugin factory; zero npm deps; `opencode plugin list` leaves a background server running |
+| OpenCode 2.x | Root `index.js` -> `plugins/<plugin>/index.js` (from `scripts/templates/opencode-index.js`) | Installs Git or npm specifiers only (`plugin add git+https://...`), reads the default export's `id`, and calls `setup(ctx)`; zero npm deps; `opencode plugin list` leaves a background server running |
 | pi | Root `package.json` (`pi.skills` names the root pack's bundle) | Any other pack installs from its bundle path, where pi finds `skills/` by convention |
 | Grok Build | `.grok-plugin/marketplace.json` -> `plugins/<plugin>/.grok-plugin/plugin.json` | Without a `hooks` field it would load `hooks/hooks.json`, so the manifest sets `"hooks": []`; root `.grok-plugin/plugin.json` keeps an install of the repository to the root pack's skills |
 | Kimi Code | Root `.kimi-plugin/plugin.json`, or `plugins/<plugin>/.kimi-plugin/plugin.json` | `/plugins install <path-or-zip-url>`, also served by `kimi web`'s API; the manifest lists only `skills`, so no hooks load |
@@ -155,7 +153,7 @@ to the path each harness reads (`hooks/hooks.json`, `hooks/codex-hooks.json`,
 root `hooks.json`), ships the rest of `hooks/<pack>/` except `tests/`,
 copies promoted skills flat into `skills/<name>/`, and writes the other
 harness manifests. Hooks run only in Claude Code, Codex, and Antigravity; the
-other manifests keep the hook files out or, on Devin, the adapter stands aside.
+other manifests keep the hook files out.
 
 ## Hooks (`hooks/<pack>/`)
 
@@ -207,9 +205,7 @@ add/update `tests/harnesses/<name>.sh`, run
 The smoke test installs into an isolated home with no model call; with no
 promoted skill yet it installs a temporary copy carrying one sample skill.
 CI skips it because it needs each harness CLI. Drivers never copy credentials
-or touch your real harness home, so a harness that needs a signed-in account
-to load plugins (Cursor, Devin) fails with its own sign-in error; the Cursor
-driver passes `CURSOR_API_KEY` through only when you export it.
+or touch your real harness home.
 
 ## Opening a pull request
 

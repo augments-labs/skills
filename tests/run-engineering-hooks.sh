@@ -13,8 +13,6 @@ tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
 export HOME="$tmp/home" TMPDIR="$tmp/tmpdir"
-# Set when Devin runs a hook; the hooks then stand aside (tested below).
-unset DEVIN_PROJECT_DIR
 export GIT_CONFIG_GLOBAL="$tmp/gitconfig" GIT_CONFIG_NOSYSTEM=1
 mkdir -p "$HOME" "$TMPDIR"
 # Hooks run under the user's bash; on macOS that is /bin/bash 3.2.
@@ -322,21 +320,6 @@ hook_io $D antigravity 'not json'
 [ "$rc" -eq 0 ] && [ "$out" = '{}' ] && ok "antigravity: unparseable input fails open" || bad "antigravity unparseable (out=$out)"
 hook_io $D bogus "$(ev_cc "$r" 'git status')"
 [ "$rc" -eq 64 ] && ok "unknown harness argument is a usage error" || bad "unknown harness (rc=$rc)"
-
-echo "hooks stay inert under Devin"
-export DEVIN_PROJECT_DIR="$r"
-hook_io $D claude-code "$(ev_cc "$r" 'git reset --hard')"
-[ "$rc" -eq 0 ] && [ -z "$out" ] && [ -z "$err" ] && ok "devin: hooks/hooks.json command is allowed silently" || bad "devin claude-code config (rc=$rc out=$out err=$err)"
-hook_io $D claude-code "{\"hook_event_name\":\"PreToolUse\",\"tool_name\":\"exec\",\"tool_input\":{\"command\":\"git reset --hard\"},\"session_id\":\"s\",\"prompt_id\":\"p\"}"
-[ "$rc" -eq 0 ] && [ -z "$out" ] && [ -z "$err" ] && ok "devin: its own event shape is allowed silently" || bad "devin event shape (rc=$rc out=$out err=$err)"
-hook_io $P antigravity "$(ev_ag "$wm" 'git commit -m x')"
-[ "$rc" -eq 0 ] && [ -z "$out" ] && [ -z "$err" ] && ok "devin: hooks.json command is allowed silently" || bad "devin antigravity config (rc=$rc out=$out err=$err)"
-hook_io $P "" "{\"hook_event_name\":\"PreToolUse\",\"tool_name\":\"edit\",\"tool_input\":{\"file_path\":$(jstr "$wm/a.txt")}}"
-[ "$rc" -eq 0 ] && [ -z "$out" ] && [ -z "$err" ] && ok "devin: no harness argument is allowed silently" || bad "devin no harness (rc=$rc out=$out err=$err)"
-export DEVIN_PROJECT_DIR=""
-hook_io $D claude-code "$(ev_cc "$r" 'git reset --hard')"
-[ "$rc" -eq 2 ] && ok "an empty DEVIN_PROJECT_DIR does not disable the hooks" || bad "empty DEVIN_PROJECT_DIR (rc=$rc)"
-unset DEVIN_PROJECT_DIR
 
 echo "push.default=upstream pushes to the upstream's name"
 git -C "$r" worktree add -q -b topic "$tmp/wt-topic" main

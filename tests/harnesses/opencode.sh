@@ -3,15 +3,12 @@
 # Everything runs under an isolated HOME and XDG directories, with no
 # credentials and no model call (never `opencode run`).
 #
-# OpenCode 2.x: `opencode plugin add` takes a Git or npm specifier, the way a
+# `opencode plugin add` takes a Git or npm specifier, the way a
 # user installs the repository. For the root pack the driver commits a
 # snapshot of the tree under test and adds git+file://<snapshot>, which loads
 # the root index.js. Any other pack is listed by its bundle directory under
 # `plugins` in opencode.json. The inventory is the skill list that
 # `opencode serve` reports through `opencode api`.
-#
-# OpenCode 1.x: the plugin file goes under `plugin` in opencode.json and the
-# inventory is `opencode debug skill`. This branch has not run on a 1.x CLI.
 
 # Run in a throwaway HOME: even `opencode --version` writes a log under it.
 oc_version() {
@@ -29,8 +26,8 @@ adapter_check() {
   opencode_major="$(printf '%s' "$opencode_version" | tr -cd '0-9.')"
   opencode_major="${opencode_major%%.*}"
   case "$opencode_major" in
-    1|2) ;;
-    *) echo "unrecognized \`opencode\` version: $opencode_version" >&2; return 3 ;;
+    2) ;;
+    *) echo "OpenCode 2.x required, found: $opencode_version" >&2; return 3 ;;
   esac
 }
 
@@ -52,11 +49,6 @@ adapter_install() { # $1 repo root, $2 plugin name
   config="$harness_home/.config/opencode/opencode.json"
   grep -q "\"./plugins/$2/index.js\"" "$1/index.js" 2>/dev/null && root=1
 
-  if [ "$opencode_major" = 1 ]; then
-    if [ "$root" = 1 ]; then snap="$1/index.js"; else snap="$1/plugins/$2/index.js"; fi
-    jq -n --arg p "$snap" '{plugin: [$p]}' >"$config"
-    return 0
-  fi
   if [ "$root" = 0 ]; then
     jq -n --arg p "$1/plugins/$2" '{plugins: [$p]}' >"$config"
     return 0
@@ -80,14 +72,6 @@ adapter_inventory() { # $1 plugin name
   local filter='.[] | (.path // .location // "") as $at |
     select($at | startswith("skill://") | not) |
     if ($at | contains($dir)) then .name else "\(.name) (\($at))" end'
-
-  if [ "$opencode_major" = 1 ]; then
-    # Staged through a file: a pipe truncates this listing.
-    (oc_exec opencode debug skill) >"$harness_home/skills.json" 2>>"$errlog" || {
-      echo "opencode debug skill failed" >>"$errlog"; return 1; }
-    jq -r --arg dir "/plugins/$1/skills/" "$filter" "$harness_home/skills.json" 2>>"$errlog"
-    return
-  fi
 
   (oc_exec opencode serve --hostname 127.0.0.1 --port 0) >"$log" 2>&1 &
   pid=$!

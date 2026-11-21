@@ -8,10 +8,8 @@ decide whether to run the command yourself.
 The hooks run in Claude Code, Codex CLI, and Antigravity when you install the
 plugin through the harness. Every other install gives you the skills only:
 
-- Cursor, Grok Build, Kimi Code, and Muse Code never load the hooks, because
-  the plugin's manifest for each of them declares none.
-- Devin loads the hook files, but the hooks are not adapted to Devin, so they
-  allow every call when Devin runs them.
+- Grok Build, Kimi Code, and Muse Code never load the hooks, because the
+  plugin's manifest for each of them declares none.
 - pi, Hermes, OpenCode, and `npx skills add` install skills only.
 
 The hooks need `bash` and `git` on your `PATH`; on Windows, that means Git for
