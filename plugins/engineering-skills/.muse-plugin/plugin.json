@@ -9,7 +9,8 @@
   },
   "capabilities": {
     "skills": [
-      { "id": "debugging", "path": "skills/debugging/SKILL.md" }
+      { "id": "debugging", "path": "skills/debugging/SKILL.md" },
+      { "id": "test-driven-development", "path": "skills/test-driven-development/SKILL.md" }
     ]
   }
 }
