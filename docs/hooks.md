@@ -65,7 +65,7 @@ judged by `topic`.
 ### Protected branches
 
 `main` and `master` are always protected. To protect more branches in one
-repository, commit a `.augments-skills.json` at its root:
+repository, commit a `.augments-labs-config.json` at its root:
 
 ```json
 { "protectedBranches": ["develop", "release/*"] }

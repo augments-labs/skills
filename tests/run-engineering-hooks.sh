@@ -202,16 +202,16 @@ git -C "$r" worktree add -q --detach "$tmp/wt-detached" main
 edit_case allow $P "$tmp/wt-detached" "$tmp/wt-detached/a.js"
 
 echo "guard-protected-branch: repository-local list adds branches but grants nothing"
-printf '%s\n' '{"protectedBranches": ["release/*"], "disabledHooks": ["guard-protected-branch"], "protectedBranchExemptRepos": ["."]}' > "$wm/.augments-skills.json"
+printf '%s\n' '{"protectedBranches": ["release/*"], "disabledHooks": ["guard-protected-branch"], "protectedBranchExemptRepos": ["."]}' > "$wm/.augments-labs-config.json"
 sh_case deny $P "$wm" 'git commit -m x'
 git -C "$r" worktree add -q -b release/1.0 "$tmp/wt-release" main
-cp "$wm/.augments-skills.json" "$tmp/wt-release/"
+cp "$wm/.augments-labs-config.json" "$tmp/wt-release/"
 sh_case deny $P "$tmp/wt-release" 'git commit -m x'
 sh_case allow $P "$r" 'git commit -m x'
-printf 'not json' > "$wm/.augments-skills.json"
+printf 'not json' > "$wm/.augments-labs-config.json"
 sh_case deny $P "$wm" 'git commit -m x'
-grep -q 'ignoring malformed' "$tmp/err" && ok "malformed .augments-skills.json is reported" || bad "malformed .augments-skills.json not reported"
-rm -f "$wm/.augments-skills.json"
+grep -q 'ignoring malformed' "$tmp/err" && ok "malformed .augments-labs-config.json is reported" || bad "malformed .augments-labs-config.json not reported"
+rm -f "$wm/.augments-labs-config.json"
 
 echo "policy.json bypasses (user-global only)"
 policy '{"disabledHooks": ["guard-protected-branch"]}'

@@ -95,10 +95,10 @@ aug_git_repo() {
 }
 
 # aug_protected_load: AUG_PROT[] = main, master, the repository's
-# .augments-skills.json protectedBranches, and the policy's. Needs R_TOP.
+# .augments-labs-config.json protectedBranches, and the policy's. Needs R_TOP.
 aug_protected_load() {
   AUG_PROT=(main master ${POL_PROTECTED[@]+"${POL_PROTECTED[@]}"})
-  local f="$R_TOP/.augments-skills.json" p
+  local f="$R_TOP/.augments-labs-config.json" p
   if [ -n "$R_TOP" ] && [ -f "$f" ]; then
     if aug_json_load "protectedBranches" < "$f"; then
       aug_jarray protectedBranches
