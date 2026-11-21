@@ -1,0 +1,172 @@
+{
+  "evals": [
+    {
+      "id": "rename-column",
+      "kind": "trap",
+      "fixture": "profiles",
+      "prompt": "We're standardizing on \"display name\" across the product. Rename the `fullname` column on `users` to `display_name` and update the code to match.",
+      "assertions": [
+        {
+          "type": "script",
+          "path": "verify_rename_column.py",
+          "description": "the trap: replicas on the previous build keep working after migrate.py, and old and new builds see each other's writes"
+        },
+        {
+          "type": "command-succeeds",
+          "command": "python3 -m unittest discover -s tests -t ."
+        }
+      ]
+    },
+    {
+      "id": "contract-too-early",
+      "kind": "trap",
+      "fixture": "profiles-contract",
+      "prompt": "The display_name rename is almost done: the backfill finished last week and every read uses display_name. Finish it by getting rid of `fullname`.",
+      "assertions": [
+        {
+          "type": "script",
+          "path": "verify_contract_too_early.py",
+          "description": "the trap: the new build stops writing fullname, and the build in production still works after migrate.py"
+        },
+        {
+          "type": "command-succeeds",
+          "command": "python3 -m unittest discover -s tests -t ."
+        }
+      ]
+    },
+    {
+      "id": "backfill-overwrite",
+      "kind": "trap",
+      "fixture": "profiles-backfill",
+      "prompt": "Users who never picked a display name still have `display_name` = NULL. Write the backfill that sets it from `fullname`, as `scripts/backfill_display_name.py` with a `run(conn)` function. Ops will run it against production while the service is up.",
+      "assertions": [
+        {
+          "type": "script",
+          "path": "verify_backfill.py",
+          "description": "the trap: the backfill fills only NULLs, in short transactions, keeps names picked while it runs, and changes nothing on a second run"
+        },
+        {
+          "type": "command-succeeds",
+          "command": "python3 -m unittest discover -s tests -t ."
+        }
+      ]
+    },
+    {
+      "id": "select-star",
+      "kind": "trap",
+      "fixture": "profiles-selectstar",
+      "prompt": "Add a `last_login_at` column to `users`, set it in a new `record_login(conn, user_id)` function, and return it from `get_user`.",
+      "assertions": [
+        {
+          "type": "script",
+          "path": "verify_select_star.py",
+          "description": "the trap: replicas on the previous build, which unpack SELECT *, keep working after migrate.py"
+        },
+        {
+          "type": "command-succeeds",
+          "command": "python3 -m unittest discover -s tests -t ."
+        }
+      ]
+    },
+    {
+      "id": "index-big-table",
+      "kind": "trap",
+      "fixture": "ledger",
+      "prompt": "The account activity page is slow: `recent_events_for_account` takes several seconds in production. Add the index it needs.",
+      "assertions": [
+        {
+          "type": "script",
+          "path": "verify_index_big_table.py",
+          "description": "the trap: the events index is built CONCURRENTLY, outside a transaction, alone in its statement"
+        },
+        {
+          "type": "command-succeeds",
+          "command": "python3 -m unittest discover -s tests -t ."
+        }
+      ]
+    },
+    {
+      "id": "add-column-lock",
+      "kind": "trap",
+      "fixture": "ledger",
+      "prompt": "Add a nullable `archived_at` timestamptz column to `accounts` and return it from `get_account`.",
+      "assertions": [
+        {
+          "type": "script",
+          "path": "verify_add_column_lock.py",
+          "description": "the trap: the ALTER on accounts runs with a lock_timeout in effect"
+        },
+        {
+          "type": "command-succeeds",
+          "command": "python3 -m unittest discover -s tests -t ."
+        }
+      ]
+    },
+    {
+      "id": "fix-readme-typo",
+      "kind": "non_trigger",
+      "fixture": "profiles",
+      "prompt": "Fix the typo \"seperate\" in README.md.",
+      "allowed_files": [
+        "README.md"
+      ],
+      "assertions": [
+        {
+          "type": "file-not-contains",
+          "path": "README.md",
+          "pattern": "seperate"
+        },
+        {
+          "type": "file-contains",
+          "path": "README.md",
+          "pattern": "separate"
+        }
+      ]
+    },
+    {
+      "id": "explain-migrate-failure",
+      "kind": "non_trigger",
+      "fixture": "profiles",
+      "prompt": "If one migration fails halfway, what does migrate.py leave behind? Just explain, don't change anything.",
+      "allowed_files": [],
+      "assertions": [
+        {
+          "type": "command-succeeds",
+          "command": "git diff --quiet"
+        }
+      ]
+    },
+    {
+      "id": "reject-empty-email",
+      "kind": "small_fix",
+      "fixture": "profiles",
+      "prompt": "`create_user` accepts an empty email. Make it raise ValueError when the email is empty or only whitespace.",
+      "assertions": [
+        {
+          "type": "script",
+          "path": "verify_empty_email.py"
+        },
+        {
+          "type": "command-succeeds",
+          "command": "python3 -m unittest discover -s tests -t ."
+        }
+      ]
+    },
+    {
+      "id": "rename-unknown-user",
+      "kind": "small_fix",
+      "fixture": "profiles",
+      "prompt": "`rename_user` silently does nothing for an id that doesn't exist. Make it raise LookupError instead.",
+      "assertions": [
+        {
+          "type": "script",
+          "path": "verify_rename_unknown.py"
+        },
+        {
+          "type": "command-succeeds",
+          "command": "python3 -m unittest discover -s tests -t ."
+        }
+      ]
+    }
+  ]
+}
