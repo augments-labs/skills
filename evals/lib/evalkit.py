@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 KINDS = ("trap", "non_trigger", "small_fix")
 ASSERTION_TYPES = ("file-exists", "file-contains", "file-not-contains",
                    "command-succeeds", "git-count", "script", "skill-triggering")
-ARMS = ("full", "distilled", "none", "old_skill")
+ARMS = ("full", "distilled", "none", "old_skill", "pack")
 SPLITS = ("train", "validation", "holdout", "negative")
 ID_RE = re.compile(r"^[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?$")
 SKILL_NAME_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
@@ -399,6 +399,7 @@ def collect_runs(ws, plan):
                     "outcome": outcome, "status": status, "metrics": metrics,
                     "unrequested": len((grading or {}).get("controls", {}).get("unrequested_files", [])),
                     "loaded": bool(status.get("skill_chain")),
+                    "chain": [s for s in status.get("skill_chain") or [] if isinstance(s, str)],
                 })
     return out
 
@@ -478,6 +479,8 @@ def delta(summary, a, b):
 
 def decide(plan, summary, deltas):
     notes = []
+    if plan["mode"] == "composite":
+        return "pack", ["composite pack check: not a promotion record"]
     if plan.get("shipped_arm_flag"):
         return plan["shipped_arm_flag"], [f"shipped_arm set by flag: {plan['shipped_arm_flag']}"]
     if plan["mode"] == "edit" or "distilled" not in summary:
@@ -501,7 +504,8 @@ def cmd_benchmark(args):
     summary = {arm: summarize_arm(plan["cases"], runs[arm]) for arm in plan["arm_order"]}
     deltas = {}
     for key, a, b in (("full_vs_none", "full", "none"), ("distilled_vs_none", "distilled", "none"),
-                      ("full_vs_distilled", "full", "distilled"), ("full_vs_old_skill", "full", "old_skill")):
+                      ("full_vs_distilled", "full", "distilled"), ("full_vs_old_skill", "full", "old_skill"),
+                      ("pack_vs_full", "pack", "full"), ("pack_vs_none", "pack", "none")):
         if a in summary and b in summary:
             deltas[key] = delta(summary, a, b)
     shipped, notes = decide(plan, summary, deltas)
@@ -523,6 +527,18 @@ def cmd_benchmark(args):
             for arm in plan["arm_order"]}} for c in plan["cases"]],
         "deltas": deltas,
     }
+    if plan["mode"] == "composite":
+        # Which skills each case loaded, per arm: the number of runs that
+        # loaded each one. Any load on a non_trigger case, and any skill but
+        # the one under test, is cross-triggering to read before promotion.
+        record["skill_loads"] = {arm: {c["id"]: dict(sorted(Counter(
+            s for r in runs[arm][c["id"]] for s in set(r["chain"])).items()))
+            for c in plan["cases"]} for arm in plan["arm_order"]}
+        if "none" in summary:
+            notes += [f"pack control gate: {w}" for w in control_failures(summary["pack"], summary["none"])]
+        others = sorted({s for loads in record["skill_loads"]["pack"].values() for s in loads} - {plan["skill"]})
+        notes.append(f"pack arm loaded other skills: {', '.join(others)}" if others
+                     else "pack arm loaded no other skill")
     dump_json(record, os.path.join(ws, "benchmark.json"))
     for n in notes:
         print(f"decision: {n}", file=sys.stderr)
@@ -769,6 +785,8 @@ def cmd_record_name(args):
         if not isinstance(rec.get(k), str) or not re.match(r"^[a-z0-9][a-z0-9-]*$", rec[k]):
             raise Invalid(f"'{k}' must be kebab-case")
     if base == "benchmark.json":
+        if rec.get("mode") == "composite":
+            raise Invalid("a composite pack check is not a promotion record; keep it in its workspace")
         if rec.get("hooks_enabled") is not False:
             raise Invalid("hooks_enabled must be false")
         for arm, ident in rec.get("arms", {}).items():

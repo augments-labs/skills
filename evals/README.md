@@ -26,7 +26,8 @@ A skill resolves from `skills/<pack>/<name>/` or, if not found there, from `skil
 
 ```
 evals/bin/evaluate --pack PACK --skill NAME [--harness claude-code|codex|antigravity]
-    [--arms full,distilled,none | --arms full,old_skill,none --base COMMIT] [--runs 3]
+    [--arms full,distilled,none | --arms full,old_skill,none --base COMMIT
+     | --arms [full,]pack[,none]] [--runs 3]
     [--jobs 1] [--eval IDS] [--model NAME] [--shipped-arm full|distilled]
     [--timeout 900] [--out DIR] [--keep-workdirs] [--allow-unverified] [--dry-run]
 evals/bin/evaluate --resume DIR [--jobs 1] [--timeout 900] [--keep-workdirs]
@@ -56,8 +57,11 @@ evals/bin/report --scoreboard [--check]
 | `distilled` | `evals/<pack>/<skill>/distilled/` |
 | `none` | nothing installed |
 | `old_skill` | the skill at `--base`, extracted with `git archive` |
+| `pack` | the skill beside every promoted skill in `skills/<pack>/` |
 
 A bundle holds `SKILL.md` and the skill's `scripts/`, `references/`, and `assets/` directories, and nothing else. Hooks are off in every arm, and records carry `hooks_enabled: false`. `--arms full,distilled,none` runs in promotion mode. An `--arms` list with `old_skill` runs in edit mode; keep `none` in it, because the eval-record gate checks the controls against `none`.
+
+An `--arms` list with `pack` runs in composite mode, a check rather than a record. It shows whether a skill still passes its cases, and whether the controls stay quiet, when the whole pack competes for the same session. Run it for every promoted skill once the pack holds more than one, and before a release. `pack` combines only with `full` and `none`. The record adds `skill_loads`: for each arm and case, how many runs loaded each skill. A load on a `non_trigger` case, or a load of a skill other than the one under test, is cross-triggering to read before you ship. `evals/bin/report` refuses a composite record.
 
 ## Cases (`evals.json`)
 
@@ -92,15 +96,19 @@ A bundle holds `SKILL.md` and the skill's `scripts/`, `references/`, and `assets
 ## `benchmark.json`
 
 ```
-{schema_version: 1, pack, skill, mode: "promotion"|"edit", shipped_arm: "full"|"distilled",
+{schema_version: 1, pack, skill, mode: "promotion"|"edit"|"composite",
+ shipped_arm: "full"|"distilled" ("pack" in composite mode),
  measured_at, harness, harness_version, model, runs_per_eval, hooks_enabled: false,
- arms: {full: {commit, skill_tree}, distilled?: {...}, old_skill?: {...}, none?: null},
+ arms: {full: {commit, skill_tree}, distilled?: {...}, old_skill?: {...}, none?: null,
+   pack?: {commit, skill_tree, pack_skills: {<skill>: <tree>}}},
  run_summary: {<arm>: {pass_rate, scored_runs, indeterminate_count, needs_review_count,
    mean_output_tokens, mean_time_seconds,
    control_non_trigger: {skill_loads, unrequested_files, median_tool_calls},
    control_small_fix: {pass_rate, median_output_tokens, median_tool_calls, median_turns}}},
  evals: [{id, kind, arms: {<arm>: {scored_runs, passed, indeterminate, needs_review}}}],
- deltas: {full_vs_none?, distilled_vs_none?, full_vs_distilled?, full_vs_old_skill?}}
+ deltas: {full_vs_none?, distilled_vs_none?, full_vs_distilled?, full_vs_old_skill?,
+   pack_vs_full?, pack_vs_none?},
+ skill_loads?: {<arm>: {<case id>: {<skill>: <runs that loaded it>}}}}
 ```
 
 - `pass_rate` covers trap cases only.
