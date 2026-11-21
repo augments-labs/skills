@@ -132,8 +132,8 @@ load_adapter() { # $1 harness name
   # shellcheck disable=SC1090
   . "$f"
   for fn in adapter_check adapter_version adapter_install adapter_run_behavioral \
-            adapter_run_activation adapter_chain adapter_ran adapter_output_tokens \
-            adapter_tool_calls adapter_turns adapter_session_model; do
+            adapter_run_activation adapter_supports_followups adapter_chain adapter_ran \
+            adapter_output_tokens adapter_tool_calls adapter_turns adapter_session_model; do
     declare -F "$fn" >/dev/null || { log "adapter $1 does not define $fn"; return 2; }
   done
   [ "${runnable:-}" = yes ] || [ "${runnable:-}" = no ] || { log "adapter $1 sets no runnable=yes|no"; return 2; }
@@ -148,13 +148,42 @@ adapter_gate() { # $1 harness $2 allow-unverified (0/1)
   fi
 }
 
+# Sends a session's follow-up messages in order, calling COMMAND... MESSAGE
+# once per message in the follow-ups file (a JSON array of strings). The
+# whole session shares one $timeout_s: each call gets what is left of it
+# since START (a $SECONDS reading taken before the first prompt), and a
+# session with nothing left ends as a timeout (124). Stops at the first
+# nonzero status and returns it.
+lab_each_followup() { # $1 follow-ups file $2 start, then COMMAND...
+  local file="$1" start="$2" n i msg left
+  shift 2
+  n="$(jq -e 'arrays | length' "$file" 2>/dev/null)" || return 1
+  for ((i = 0; i < n; i++)); do
+    msg="$(jq -e -r --argjson i "$i" '.[$i] | strings' "$file" 2>/dev/null)" || return 1
+    if [ -n "${timeout_s:-}" ] && [ "$timeout_s" -gt 0 ] 2>/dev/null; then
+      left=$((timeout_s - (SECONDS - start)))
+      [ "$left" -gt 0 ] || return 124
+      timeout_s="$left" "$@" "$msg" || return $?
+    else
+      "$@" "$msg" || return $?
+    fi
+  done
+}
+
 # Runs one agent session in a throwaway home: seeds credentials, installs the
-# bundle ("" for none), then calls the adapter. Sets setup_failed when the
+# bundle ("" for none), then calls the adapter. A follow-ups file goes to the
+# adapter as a fourth argument; an adapter that cannot send follow-ups gets
+# no session at all (setup_failed=followups_unsupported), so a multi-turn
+# case is never graded on its first turn alone. Sets setup_failed when the
 # home could not be prepared. Returns the session's exit status. Stdin is
 # detached so a session never drains a caller's read loop.
-lab_session() { # $1 base dir $2 bundle $3 kind (behavioral|activation) $4 work dir $5 prompt (file for behavioral) $6 stream $7 stderr log
-  local base="$1" bundle="$2" kind="$3" wd="$4" prompt="$5" stream="$6" err="$7" rc=0
+lab_session() { # $1 base dir $2 bundle $3 kind (behavioral|activation) $4 work dir $5 prompt (file for behavioral) $6 stream $7 stderr log [$8 follow-ups file]
+  local base="$1" bundle="$2" kind="$3" wd="$4" prompt="$5" stream="$6" err="$7" followups="${8:-}" rc=0
   setup_failed=""
+  if [ -n "$followups" ] && ! adapter_supports_followups; then
+    setup_failed=followups_unsupported
+    return 90
+  fi
   (
     set +e
     eval "$(lab_home_env "$base")" || exit 90
@@ -162,7 +191,7 @@ lab_session() { # $1 base dir $2 bundle $3 kind (behavioral|activation) $4 work 
     errlog="$err"
     lab_seed_credentials "$harness" || { echo credential_seed_failed > "$base/setup-failed"; exit 90; }
     adapter_install "$bundle" >> "$err" 2>&1 || { echo install_failed > "$base/setup-failed"; exit 90; }
-    "adapter_run_$kind" "$wd" "$prompt" "$stream"
+    "adapter_run_$kind" "$wd" "$prompt" "$stream" ${followups:+"$followups"}
   ) < /dev/null || rc=$?
   lab_home_cleanup "$base"
   if [ -f "$base/setup-failed" ]; then

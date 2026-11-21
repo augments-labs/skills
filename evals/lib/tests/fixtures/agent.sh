@@ -9,13 +9,15 @@
 #   dead        print nothing (no model turn)
 #   refuse      a provider refusal on stderr, exit 1
 #   crash       one turn, then exit 3
+#   crash-followup  a follow-up turn exits 3 (the first prompt runs normally)
 #   sleep       one turn, then sleep past any test timeout
 #   linger      activation: load the skill, then keep the session open
 #   none-loads  report a skill load even with no bundle installed
 #   sprawl      with a bundle, write an unrequested file on the typo task
 #   parallel    briefly hold an active slot and record concurrency counts
 #   drain       read stdin to EOF first, as an agent CLI in print mode does
-# Every launch appends what it saw to $FAKE_STATE/launches.
+# Every launch appends what it saw to $FAKE_STATE/launches, and a follow-up
+# appends its message (then a "--" line) to $FAKE_STATE/followups.
 kind="$1" wd="$2" prompt="$3" bundle="$4"
 state="${FAKE_STATE:-}"
 mode=""
@@ -38,6 +40,7 @@ case "$mode" in
   dead) exit 0 ;;
   refuse) echo "error: usage limit reached for this account" >&2; exit 1 ;;
   crash) echo "TURN"; exit 3 ;;
+  crash-followup) if [ "$kind" = followup ]; then echo "TURN"; exit 3; fi ;;
   sleep) echo "TURN"; sleep 30; exit 0 ;;
   parallel)
     if [ -n "$state" ]; then
@@ -56,6 +59,20 @@ if [ -n "$bundle" ] && [ -f "$bundle/skills/demo-skill/SKILL.md" ]; then
 fi
 echo "MODEL fake-model-1"
 echo "TURN"
+
+if [ "$kind" = followup ]; then
+  # A follow-up in the same session: the work tree holds the earlier turns' edits.
+  [ -n "$state" ] && printf '%s\n--\n' "$prompt" >> "$state/followups"
+  case "$prompt" in
+    *registry.txt*)
+      echo "TOOL Edit"
+      sed 's/oldWidget/newWidget/g' registry.txt > registry.txt.tmp && mv registry.txt.tmp registry.txt
+      echo "TOKENS 15" ;;
+    *) echo "TOKENS 5" ;;
+  esac
+  echo "TEXT follow-up done"
+  exit 0
+fi
 
 if [ "$kind" = activation ]; then
   # What the work tree was seeded with, for the per-query fixture test.

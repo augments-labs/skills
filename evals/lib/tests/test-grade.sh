@@ -38,6 +38,12 @@ reject "a git-count of something else" '{"evals":[{"id":"a","kind":"trap","promp
 reject "a script with source and path" '{"evals":[{"id":"a","kind":"trap","prompt":"p","assertions":[{"type":"script","source":"x","path":"verify.py"}]}]}' "exactly one of"
 reject "a missing verifier" '{"evals":[{"id":"a","kind":"trap","prompt":"p","assertions":[{"type":"script","path":"nope.py"}]}]}' "verifier not found"
 reject "a missing fixture" '{"evals":[{"id":"a","kind":"trap","prompt":"p","fixture":"gone","assertions":['"$A"']}]}' "fixture directory not found"
+reject "follow-ups that are not a list" '{"evals":[{"id":"a","kind":"trap","prompt":"p","followups":"next","assertions":['"$A"']}]}' "'followups' must be a non-empty list"
+reject "an empty follow-up list" '{"evals":[{"id":"a","kind":"trap","prompt":"p","followups":[],"assertions":['"$A"']}]}' "'followups' must be a non-empty list"
+reject "a null follow-up list" '{"evals":[{"id":"a","kind":"trap","prompt":"p","followups":null,"assertions":['"$A"']}]}' "'followups' must be a non-empty list"
+reject "an empty follow-up" '{"evals":[{"id":"a","kind":"trap","prompt":"p","followups":["next",""],"assertions":['"$A"']}]}' "followups[1]: a follow-up must be a non-empty string"
+reject "a blank follow-up" '{"evals":[{"id":"a","kind":"trap","prompt":"p","followups":["  "],"assertions":['"$A"']}]}' "followups[0]: a follow-up must be a non-empty string"
+reject "a follow-up that is not a string" '{"evals":[{"id":"a","kind":"trap","prompt":"p","followups":[1],"assertions":['"$A"']}]}' "followups[0]: a follow-up must be a non-empty string"
 printf '%s\n' '{"evals":[{"id":"a","kind":"trap","prompt":"p","assertions":['"$A"']}]}' > "$cdir/evals.json"
 refute "rejects an unknown --only id" q ek cases "$cdir/evals.json" --only zzz
 
@@ -45,6 +51,10 @@ fx="$TL_FIX/repo/evals/engineering/demo-skill/evals.json"
 check "accepts the fixture cases" q ek cases "$fx"
 eq "keeps evals.json order" "rename-widget,fix-readme-typo,change-greeting" "$(ek cases "$fx" | jq -r 'map(.id) | join(",")')"
 eq "filters with --only" "change-greeting" "$(ek cases "$fx" --only change-greeting | jq -r 'map(.id) | join(",")')"
+eq "a case without follow-ups has no followups key" "false,false,false" "$(ek cases "$fx" | jq -r 'map(has("followups")) | join(",")')"
+printf '%s\n' '{"evals":[{"id":"a","kind":"trap","prompt":"p","followups":["Now the registry.","Thanks."],"assertions":['"$A"']}]}' > "$cdir/evals.json"
+eq "follow-ups pass through in order, after the prompt" '["id","kind","prompt","followups","fixture","allowed_files","assertions"]|["Now the registry.","Thanks."]' \
+  "$(ek cases "$cdir/evals.json" | jq -c '.[0] | (keys_unsorted | tostring) + "|" + (.followups | tostring)' | jq -r .)"
 eq "every kind and assertion type is covered by the fixture" \
   "change-greeting,fix-readme-typo,rename-widget|command-succeeds,file-contains,file-exists,file-not-contains,git-count,script|non_trigger,small_fix,trap" \
   "$(jq -r '[(.evals | map(.id) | sort | join(",")), ([.evals[].assertions[].type] | unique | join(",")), ([.evals[].kind] | unique | join(","))] | join("|")' "$fx")"

@@ -75,6 +75,11 @@ excluded from all generated plugin bundles under `plugins/`.
 - **Hooks held constant:** Skill eval runs disable hooks across every arm
   (`full`, `distilled`, `none`) so skill deltas are never confounded with hook
   enforcement. Hooks have their own unit and live tests.
+- **Multi-turn cases:** A case may add `followups`, a list of messages sent
+  in order into the same session after its prompt, and is graded on the final
+  work tree (see `evals/README.md`). Measure such a case on a harness that
+  sends follow-ups: on any other, its runs are indeterminate
+  (`followups_unsupported`), and a record needs zero indeterminate runs.
 - **Promotion (`skills/in-progress/` -> `skills/<pack>/`):** Requires:
   1. A **3-arm behavior benchmark** (`full`, `distilled`, `none`) with `>= 3`
      scored runs per eval case across realistic multi-file adversarial tasks
