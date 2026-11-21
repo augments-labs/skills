@@ -42,10 +42,22 @@ _cc_exec() { # $1 work dir, then claude arguments
       claude "$@" --output-format stream-json --verbose ${extra[@]+"${extra[@]}"} )
 }
 
-adapter_run_behavioral() { # $1 work dir $2 prompt file $3 stream
-  _cc_exec "$1" -p "$(cat "$2")" --permission-mode acceptEdits \
-    --allowedTools Skill Read Glob Grep Write Edit Bash TodoWrite > "$3" 2>> "${errlog:-/dev/null}"
+_cc_edit_flags=(--permission-mode acceptEdits --allowedTools Skill Read Glob Grep Write Edit Bash TodoWrite)
+
+# Follow-ups continue the session in the same work tree and config dir (the
+# CLI resumes the latest conversation of that directory) and append their
+# events to the stream.
+adapter_run_behavioral() { # $1 work dir $2 prompt file $3 stream [$4 follow-ups file]
+  local start="$SECONDS"
+  _cc_exec "$1" -p "$(cat "$2")" "${_cc_edit_flags[@]}" > "$3" 2>> "${errlog:-/dev/null}" || return $?
+  [ -z "${4:-}" ] || lab_each_followup "$4" "$start" _cc_followup "$1" "$3"
 }
+
+_cc_followup() { # $1 work dir $2 stream $3 message
+  _cc_exec "$1" -p "$3" --continue "${_cc_edit_flags[@]}" >> "$2" 2>> "${errlog:-/dev/null}"
+}
+
+adapter_supports_followups() { true; }
 
 adapter_run_activation() { # $1 work dir $2 prompt $3 stream
   _cc_exec "$1" -p "$2" --max-turns "${maxturns:-6}" --tools "Skill,Read,Glob,Grep" \
@@ -61,8 +73,11 @@ adapter_chain() {
 
 adapter_ran() { [ "$(lab_json_events "$1" | jq -s 'any(.[]; .type == "assistant")')" = true ]; }
 
+# Every CLI call ends in one result event (a follow-up adds one), each
+# counting that call alone, so the session's totals are their sums.
 adapter_output_tokens() {
-  lab_json_events "$1" | jq -s -r '[.[] | select(.type == "result") | .usage.output_tokens // empty | numbers] | last // empty'
+  lab_json_events "$1" | jq -s -r '[.[] | select(.type == "result") | .usage.output_tokens // empty | numbers]
+    | if length > 0 then add else empty end'
 }
 
 adapter_tool_calls() {
@@ -70,7 +85,8 @@ adapter_tool_calls() {
 }
 
 adapter_turns() {
-  lab_json_events "$1" | jq -s -r '([.[] | select(.type == "result") | .num_turns // empty | numbers] | last)
+  lab_json_events "$1" | jq -s -r '([.[] | select(.type == "result") | .num_turns // empty | numbers]
+      | if length > 0 then add else null end)
     // ([.[] | select(.type == "assistant")] | length)'
 }
 

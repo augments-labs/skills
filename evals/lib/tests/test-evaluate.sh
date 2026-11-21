@@ -323,6 +323,86 @@ contains "--resume explains the skill tree mismatch" "$TL_TMP/resume.err" "skill
 eq "--resume mismatch launches nothing" 0 "$(tl_launches)"
 git -C "$repo" checkout -q -- skills/in-progress/demo-skill/SKILL.md
 
+# --- follow-ups: more messages in the same session ---------------------------
+frepo="$(tl_make_repo followup-repo)" || tl_done
+fcases="$frepo/evals/engineering/demo-skill/evals.json"
+jq '.evals += [.evals[0] | .id = "rename-then-registry"
+      | .followups = ["Now update registry.txt to match the rename.", "Thanks, that is all."]]' \
+  "$fcases" > "$fcases.tmp" && mv "$fcases.tmp" "$fcases"
+( cd "$frepo" && tl_git commit -qam "a case with follow-ups" ) || not_ok "commit the follow-up case"
+tl_use_fake "$frepo"
+fu_reason() { jq -r '[.outcome, .reason // "-", .exit_status] | join(" ")' "$ws/runs/$1/run_status.json"; }
+
+"$EV" "${SK[@]}" --dry-run > /dev/null 2> "$TL_TMP/dry.err"
+contains "the plan counts a case's follow-ups" "$TL_TMP/dry.err" "  case rename-then-registry (trap, 2 follow-up(s))"
+contains "a single-prompt case is listed as before" "$TL_TMP/dry.err" "  case rename-widget (trap)"
+contains "follow-ups add no sessions to the plan" "$TL_TMP/dry.err" "4 case(s) x 3 arm(s) x 3 run(s) = 36 agent session(s)"
+lacks "a supporting adapter gets no follow-up warning" "$TL_TMP/dry.err" "cannot send follow-ups"
+FAKE_FOLLOWUPS=no "$EV" "${SK[@]}" --dry-run > /dev/null 2> "$TL_TMP/dry.err"
+contains "the plan warns when the adapter cannot send follow-ups" "$TL_TMP/dry.err" \
+  "adapter: fake cannot send follow-ups; 1 case(s) with follow-ups run no session and count as indeterminate (followups_unsupported)"
+FAKE_FOLLOWUPS=no "$EV" "${SK[@]}" --eval change-greeting --dry-run > /dev/null 2> "$TL_TMP/dry.err"
+lacks "no warning when no selected case has follow-ups" "$TL_TMP/dry.err" "cannot send follow-ups"
+
+evaluate --runs 1 --eval rename-then-registry --arms full,none
+eq "a follow-up run exits 0" 0 "$rc"
+eq "each session sends its prompt, then each follow-up" 6 "$(tl_launches)"
+eq "two of every three calls are follow-ups" 4 "$(grep -c 'kind=followup' "$FAKE_LAUNCH_LOG")"
+eq "a follow-up runs in its session's home and work tree" 0 "$(awk '{ split($2, h, "="); split($4, w, "="); n[w[2]]++
+    if (!(w[2] in home)) home[w[2]] = h[2]; else if (home[w[2]] != h[2]) bad++ }
+    END { for (k in n) if (n[k] != 3) bad++; print bad + 0 }' "$FAKE_STATE/launches")"
+eq "follow-ups are sent in order" "Now update registry.txt to match the rename.|--|Thanks, that is all.|--" \
+  "$(head -n 4 "$FAKE_STATE/followups" | paste -sd'|' -)"
+rd="$ws/runs/rename-then-registry/none/run-1"
+jeq "the run keeps its follow-ups" "$rd/followups.json" '.' '["Now update registry.txt to match the rename.","Thanks, that is all."]'
+eq "prompt.txt holds the first prompt only" "Rename the widget oldWidget to newWidget." "$(cat "$rd/prompt.txt")"
+eq "every turn is appended to one stream" 3 "$(grep -c '^TURN' "$rd/stream.ndjson")"
+contains "the answer text includes the last turn" "$rd/response.txt" "TEXT follow-up done"
+jeq "metrics sum every turn" "$rd/metrics.json" '[.output_tokens, .tool_calls, .turns]' '[140,3,3]'
+jeq "a follow-up run completes" "$rd/run_status.json" '[.outcome, .reason]' '["completed",null]'
+jeq "the case is graded on the final tree" "$bench" '[.run_summary.full.pass_rate, .run_summary.none.pass_rate]' '[1,1]'
+contains "the final diff holds the follow-up's edit" "$rd/diff.patch" "+newWidget"
+jeq "the case snapshot keeps its follow-ups" "$ws/cases/rename-then-registry.json" '.followups | length' 2
+
+: > "$FAKE_LAUNCH_LOG"
+evaluate --runs 1 --eval rename-widget --arms full,none
+eq "a single-prompt case is one call per session" 2 "$(tl_launches)"
+lacks "a single-prompt case sends no follow-up" "$FAKE_LAUNCH_LOG" "kind=followup"
+check "a single-prompt run has no followups.json" test ! -e "$ws/runs/rename-widget/none/run-1/followups.json"
+jeq "a single-prompt case snapshot has no followups key" "$ws/cases/rename-widget.json" 'has("followups")' false
+jeq "a single-prompt case scores as before" "$bench" '[.run_summary.full.pass_rate, .run_summary.none.pass_rate]' '[1,0]'
+
+: > "$FAKE_LAUNCH_LOG"; rm -f "$FAKE_STATE/launches"
+FAKE_FOLLOWUPS=no evaluate --runs 1 --eval rename-then-registry,change-greeting --arms full,none
+eq "an unsupported adapter still exits 0" 0 "$rc"
+eq "an unsupported adapter launches no follow-up case" 2 "$(tl_launches)"
+lacks "the launches were the single-prompt case's" "$FAKE_STATE/launches" "kind=followup"
+eq "a follow-up case is indeterminate on an unsupported adapter" "indeterminate followups_unsupported 90" \
+  "$(fu_reason rename-then-registry/full/run-1)"
+jeq "it is counted apart, never graded on its first turn" "$bench" '.evals[] | select(.id == "rename-then-registry") | .arms.none' \
+  '{"scored_runs":0,"passed":0,"indeterminate":1,"needs_review":0}'
+jeq "the single-prompt case beside it still scores" "$bench" '.run_summary.none.control_small_fix.pass_rate' 1
+contains "the run log names the reason" "$TL_TMP/evaluate.err" "(followups_unsupported)"
+eq "an unsupported session leaves no run directory" "" "$(ls -A "$TMPDIR")"
+
+: > "$FAKE_LAUNCH_LOG"; rm -f "$FAKE_STATE/followups"
+mode crash-followup
+evaluate --runs 1 --eval rename-then-registry --arms full
+eq "a failed follow-up is indeterminate" "indeterminate nonzero_exit 3" "$(fu_reason rename-then-registry/full/run-1)"
+eq "a failed follow-up stops the session" 2 "$(tl_launches)"
+
+mode refuse
+evaluate --runs 1 --eval rename-then-registry --arms full
+ws_fu="$ws"
+mode ""
+: > "$FAKE_LAUNCH_LOG"
+FAKE_FOLLOWUPS=no resume_eval --resume "$ws_fu" --dry-run
+contains "a resumed plan warns about follow-ups too" "$TL_TMP/resume.err" "1 case(s) with follow-ups run no session"
+resume_eval --resume "$ws_fu"
+eq "a resumed follow-up session exits 0" 0 "$rc"
+eq "a resumed session sends its follow-ups" 3 "$(tl_launches)"
+jeq "a resumed follow-up session is scored" "$ws_fu/benchmark.json" '.run_summary.full.pass_rate' 1
+
 # --- edit mode: full vs the skill at --base ----------------------------------
 erepo="$(tl_make_repo edit-repo)" || tl_done
 tl_use_fake "$erepo"

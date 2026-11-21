@@ -83,6 +83,7 @@ slot_resume_state() { # $1 run dir; prints keep, refusal, or missing
 
 repo="$(repo_root)"
 case_ids=()
+followup_cases=0
 if [ "$resume_set" -eq 1 ]; then
   [ -n "$resume" ] || die "--resume needs a workspace directory"
   [ "$plan_flag_set" -eq 0 ] || die "--resume takes settings from the workspace plan; do not combine with --pack/--skill/--harness/--arms/--base/--runs/--eval/--model/--shipped-arm/--out"
@@ -130,6 +131,7 @@ if [ "$resume_set" -eq 1 ]; then
   while IFS= read -r id; do
     [ -f "$ws/cases/$id.json" ] || die "missing case snapshot $ws/cases/$id.json"
     case_ids+=("$id")
+    jq -e 'has("followups")' "$ws/cases/$id.json" >/dev/null 2>&1 && followup_cases=$((followup_cases + 1))
   done < <(jq -r '.cases[].id' "$ws/plan.json")
 else
   [ -n "$pack" ] && [ -n "$skill" ] || { usage >&2; die "--pack and --skill are required"; }
@@ -178,6 +180,7 @@ else
   while IFS= read -r id; do
     case_ids+=("$id")
   done < <(jq -r '.[].id' <<< "$cases_json")
+  followup_cases="$(jq '[.[] | select(has("followups"))] | length' <<< "$cases_json")"
 fi
 
 # Interleave cases across parallel slots (run -> arm -> case) so heavy cases
@@ -214,8 +217,11 @@ if [ "$resume_set" -eq 1 ]; then
 else
   log "plan: $pack/$skill on $harness, mode=$mode, arms=${arms_csv}, runs=$runs, hooks OFF in every arm"
   [ "$runnable" = yes ] || log "  adapter: runnable=no ($runnable_reason)"
-  jq -r '.[] | "  case \(.id) (\(.kind))"' <<< "$cases_json" >&2
+  jq -r '.[] | "  case \(.id) (\(.kind)\(if has("followups") then ", \(.followups | length) follow-up(s)" else "" end))"' <<< "$cases_json" >&2
   log "  $n_cases case(s) x ${#arms[@]} arm(s) x $runs run(s) = $sessions agent session(s), $jobs at a time"
+fi
+if [ "$followup_cases" -gt 0 ] && ! adapter_supports_followups; then
+  log "  adapter: $harness cannot send follow-ups; $followup_cases case(s) with follow-ups run no session and count as indeterminate (followups_unsupported)"
 fi
 log "  worst-case wall time: $(( (to_run + jobs - 1) / jobs * timeout_s / 60 )) min at --timeout $timeout_s"
 if [ -n "${EVALS_COST_PER_SESSION:-}" ]; then
@@ -299,12 +305,18 @@ now_s() { printf '%s\n' "${EPOCHREALTIME:-$(date +%s)}"; }
 
 run_one() { # $1 case file $2 arm $3 run number
   local cf="$1" arm="$2" k="$3" id kind fixture rd base wd stream err rc=0 start end ran=0
-  local chain reason="" outcome=completed bundle=""
+  local chain reason="" outcome=completed bundle="" followups=""
   id="$(jq -r .id "$cf")"; kind="$(jq -r .kind "$cf")"; fixture="$(jq -r '.fixture // ""' "$cf")"
   rd="$ws/runs/$id/$arm/run-$k"; base="$run_base/$id/$arm/run-$k"; wd="$base/work"
   stream="$rd/stream.ndjson"; err="$rd/stderr.log"
   rm -rf "$rd" && mkdir -p "$rd"; : > "$stream"; : > "$err"
   jq -r .prompt "$cf" > "$rd/prompt.txt"
+  # Follow-ups are sent in order into the same session after the first
+  # prompt; the case is graded once, on the final work tree.
+  if jq -e 'has("followups")' "$cf" >/dev/null 2>&1; then
+    followups="$rd/followups.json"
+    jq '.followups' "$cf" > "$followups"
+  fi
   if [ "$arm" != none ]; then bundle="$ws/bundles/$arm"; fi
   log "run: $id [$kind] arm=$arm run=$k"
 
@@ -312,7 +324,7 @@ run_one() { # $1 case file $2 arm $3 run number
     rc=1; reason=seed_failed
   else
     start="$(now_s)"
-    lab_session "$base" "$bundle" behavioral "$wd" "$rd/prompt.txt" "$stream" "$err" || rc=$?
+    lab_session "$base" "$bundle" behavioral "$wd" "$rd/prompt.txt" "$stream" "$err" ${followups:+"$followups"} || rc=$?
     end="$(now_s)"
     reason="$setup_failed"
   fi
