@@ -3,7 +3,7 @@
 #
 # A record is the compact benchmark.json (bin/evaluate) or triggering.json
 # (bin/triggering) and nothing else: no transcripts, streams, or work trees.
-# It lands in evals/results/<date>-<pack>-<skill>-<harness>[-triggering]/.
+# It lands in evals/results/<date>-<pack>-<skill>-<harness>[-<model>][-triggering]/.
 set -euo pipefail
 export LC_ALL=C
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
@@ -14,7 +14,7 @@ usage() {
 Usage:
   evals/bin/report WORKSPACE|RECORD.json [--date YYYY-MM-DD]
       Validate the workspace's benchmark.json or triggering.json and copy it,
-      alone, into evals/results/<date>-<pack>-<skill>-<harness>[-triggering]/.
+      alone, into evals/results/<date>-<pack>-<skill>-<harness>[-<model>][-triggering]/.
       Refuses an existing target, a skill_tree of null (uncommitted skill or a
       candidate description), and a record with hooks enabled. Recording a
       benchmark also rewrites the README scoreboard.

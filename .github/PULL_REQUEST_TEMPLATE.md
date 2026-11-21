@@ -22,8 +22,8 @@ paste check output here
 
 <!-- Required for any PR that adds, promotes, or edits a skill under skills/<pack>/ (not skills/in-progress/ or skills/deprecated/).
      Write one line per committed record under evals/results/, starting at column 0:
-     Eval record: evals/results/<date>-<pack>-<skill>-<harness>
-     Eval record: evals/results/<date>-<pack>-<skill>-<harness>-triggering
+     Eval record: evals/results/<date>-<pack>-<skill>-<harness>-<model>
+     Eval record: evals/results/<date>-<pack>-<skill>-<harness>-<model>-triggering
      If the PR is exempt, write `none: <reason>`. Exemptions (typos, moves, or removals) need the maintainer `no-eval` label. -->
 
 - **Live environments tested:** <!-- Harness + version + model + one-line observation, or `offline checks only` -->
