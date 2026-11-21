@@ -64,10 +64,10 @@ Files under `skills/`, `hooks/`, `plugins/`, and `docs/` ship to users.
 1. **Agent Skills standard first.** Every skill directory contains `SKILL.md`
    with a double-quoted `description` (1 to 1,024 characters) and a kebab-case
    `name` matching its directory. Prefer gerund/activity names such as
-   `debugging`, `verifying`, `changing-a-live-schema`, `finishing-a-branch`,
-   and `reviewing-code`. They clearly express the activity and avoid colliding
-   with short built-in harness commands like `review`, `simplify`, `plan`,
-   `help`, `clear`, and `compact`. A skill directory may also contain optional
+   `debugging`, `verifying-before-completion`, `changing-a-live-schema`,
+   `finishing-a-branch`, and `reviewing-code`. They clearly express the activity
+   and avoid colliding with short built-in harness commands like `review`,
+   `simplify`, `plan`, `help`, `clear`, and `compact`. A skill directory may also contain optional
    `scripts/`, `references/`, and `assets/`. User-invoked workflows carry
    `disable-model-invocation: true` plus explicit manual-only wording in
    `description`. Never declare inline `hooks` in `SKILL.md` frontmatter.
@@ -140,7 +140,7 @@ Files under `skills/`, `hooks/`, `plugins/`, and `docs/` ship to users.
   - **Security separation of config:** Human hook bypasses and external CLI
     commands (such as cross-model review commands) live strictly in user-global
     config outside the repository (`~/.config/augments-skills/`), never in
-    repo-local `.augments-skills.json`. Hooks MUST also block writes to
+    repo-local `.augments-labs-config.json`. Hooks MUST also block writes to
     `~/.config/augments-skills/`.
   - **Anti-gaming rule:** Any PR that modifies both `evals/<pack>/<name>/**`
     (assertions, queries, fixtures, verifiers, or `distilled/SKILL.md`) and

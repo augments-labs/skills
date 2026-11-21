@@ -29,8 +29,9 @@ Thank you for contributing. This guide is written for people; coding agents read
    generated plugin bundles under `plugins/<plugin>/`. Run
    `bash scripts/sync-plugins.sh` after editing promoted skills or hooks.
 5. Follow the authoring rules in [`AGENTS.md`](AGENTS.md): strict Agent Skills
-   conformance, gerund/activity kebab-case names (`debugging`, `verifying`,
-   `changing-a-live-schema`, `finishing-a-branch`, `reviewing-code`) with no
+   conformance, gerund/activity kebab-case names (`debugging`,
+   `verifying-before-completion`, `changing-a-live-schema`, `finishing-a-branch`,
+   `reviewing-code`) with no
    built-in slash-command shadowing (e.g., `review`, `simplify`, `plan`), body
    size caps (`<= 200` lines / `<= 2,000` tokens / `<= 8,000` bytes), per-pack
    description caps (`<= 3,400` auto / `<= 2,400` user / `<= 5,800` combined),
@@ -174,7 +175,7 @@ Rules for hook code:
 - Allow events the adapter cannot parse, with a note on stderr. Ignore a
   malformed `policy.json` with a note, so it grants nothing.
 - Read bypasses only from `~/.config/augments-skills/policy.json`. A
-  repository's `.augments-skills.json` may only add protected branches.
+  repository's `.augments-labs-config.json` may only add protected branches.
 - On Antigravity, answer `{}` to allow. Never answer `"decision": "allow"`,
   which approves the call outright and skips the harness's own permission
   checks.

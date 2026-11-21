@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # guard-protected-branch: Blocks commits, merges, pushes, and file edits on protected branches (main,
-# master, and the repository's .augments-skills.json protectedBranches).
+# master, and the repository's .augments-labs-config.json protectedBranches).
 # Also blocks writes to ~/.config/augments-skills/, which only the user may change.
 #
 # Usage: guard-protected-branch.sh [claude-code|codex|antigravity] < hook-event.json

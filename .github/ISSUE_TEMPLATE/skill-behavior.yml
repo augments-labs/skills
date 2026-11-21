@@ -10,7 +10,7 @@ body:
     id: skill
     attributes:
       label: Pack and skill
-      placeholder: e.g. engineering / changing-a-live-schema, or verifying failed to trigger
+      placeholder: e.g. engineering / changing-a-live-schema, or verifying-before-completion failed to trigger
     validations:
       required: true
   - type: textarea
