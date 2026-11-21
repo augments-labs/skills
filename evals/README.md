@@ -135,7 +135,7 @@ A bundle holds `SKILL.md` and the skill's `scripts/`, `references/`, and `assets
 ## Isolation
 
 - **Throwaway home.** Each session runs in its own home under `TMPDIR`, with a cleared environment and no session bus. The home is removed after the run.
-- **Seeded credentials.** The only things copied in are credential files: `.claude/.credentials.json`, `.codex/auth.json`, and the contents of `$EVALS_CREDENTIAL_SEED/<harness>/`. Seed files get mode 0600. A `.eval-env` file in the seed is sourced by the child process only.
+- **Seeded credentials.** The only things copied in are credential files: `.claude/.credentials.json`, `.codex/auth.json`, `.gemini/oauth_creds.json` (plus `DBUS_SESSION_BUS_ADDRESS` for Antigravity's OS keyring when unseeded), and the contents of `$EVALS_CREDENTIAL_SEED/<harness>/`. Seed files get mode 0600. A `.eval-env` file in the seed (for example an API key) is sourced by the child process only and takes precedence over operator subscription auth.
 - **Hooks off.** Operator settings, `config.toml`, and hooks are never copied. The claude-code adapter writes `{"disableAllHooks": true}`.
 - **Refusal outside isolation.** Adapters refuse to install unless `HOME` is the isolated home.
 
@@ -149,6 +149,6 @@ An adapter is a sourced shell file. It sets `adapter_name`, `runnable=yes|no`, a
 |---|---|---|
 | `claude-code` | yes | stream-json parser and install verified against recorded fixtures |
 | `codex` | no | parser and install covered offline; not yet validated against a live CLI |
-| `antigravity` | no | parser and plugin install covered offline; not yet validated against a live CLI |
+| `antigravity` | yes | plugin install and stream-json parser verified against live `agy` CLI (pass `--model` from `agy models` to pin and record the model ID) |
 
 `--allow-unverified` runs an adapter marked `runnable=no`. The offline suites use `lib/tests/fake-cli/fake.sh` and a scripted agent. Tripwire shims named `claude`, `codex`, and `agy` sit first on `PATH`, so a suite fails if it ever reaches a real CLI.

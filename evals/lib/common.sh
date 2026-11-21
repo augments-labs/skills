@@ -98,8 +98,8 @@ lab_changed_files() { # $1 work tree $2 base commit
 # True when the provider refused the session (quota, login, credentials)
 # rather than the model answering it.
 lab_refusal() { # $1 stream $2 stderr log
-  grep -qiE 'usage limit|login_required|api_error: 4' "$1" 2>/dev/null \
-    || grep -qiE 'usage limit|login_required|authorization grant|no credential|credential configured|not authenticated|invalid_grant|unauthorized' "$2" 2>/dev/null
+  grep -qiE 'usage limit|login_required|api_error: 4|authentication required|authentication failed|quota exceeded|rate limit|resource_exhausted' "$1" 2>/dev/null \
+    || grep -qiE 'usage limit|login_required|authorization grant|no credential|credential configured|not authenticated|invalid_grant|unauthorized|authentication required|authentication failed|quota exceeded|rate limit|resource_exhausted' "$2" 2>/dev/null
 }
 
 # Why a finished run cannot be scored, or nothing when it can. Indeterminate
@@ -157,7 +157,7 @@ lab_session() { # $1 base dir $2 bundle $3 kind (behavioral|activation) $4 work 
   (
     set +e
     eval "$(lab_home_env "$base")" || exit 90
-    export LAB_RUN_BASE EVALS_OPERATOR_HOME HOME XDG_CONFIG_HOME XDG_DATA_HOME XDG_CACHE_HOME XDG_RUNTIME_DIR TMPDIR
+    export LAB_RUN_BASE EVALS_OPERATOR_HOME EVALS_OPERATOR_DBUS HOME XDG_CONFIG_HOME XDG_DATA_HOME XDG_CACHE_HOME XDG_RUNTIME_DIR TMPDIR
     errlog="$err"
     lab_seed_credentials "$harness" || { echo credential_seed_failed > "$base/setup-failed"; exit 90; }
     adapter_install "$bundle" >> "$err" 2>&1 || { echo install_failed > "$base/setup-failed"; exit 90; }
