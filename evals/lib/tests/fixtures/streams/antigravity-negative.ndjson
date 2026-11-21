@@ -1,0 +1,4 @@
+{"event":"init","conversation_id":"conv-2","init":{"cwd":"/tmp/work","tools":["view_file"]}}
+{"event":"step_update","step_update":{"conversation_id":"conv-2","step_index":1,"state":"DONE","step_type":"tool_call","tool_name":"view_file","path":"/tmp/work/src/app.ts"}}
+{"event":"step_update","step_update":{"conversation_id":"conv-2","step_index":2,"state":"DONE","step_type":"agent_response","text_delta":"no skill needed"}}
+{"event":"result","result":{"conversation_id":"conv-2","status":"SUCCESS","response":"no skill needed","num_turns":1}}

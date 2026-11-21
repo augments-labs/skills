@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Grades one finished run against its case's deterministic assertions and
+# writes <run-dir>/grading.json. An indeterminate run is never graded: its
+# pass_rate is null and it is counted apart.
+set -euo pipefail
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/../lib/common.sh"
+
+case "${1:-}" in
+  -h|--help|"")
+    echo "Usage: evals/bin/grade RUN_DIR CASE_JSON [CASE_DIR]"
+    echo "  RUN_DIR holds run_status.json (with its workdir) and changed-files.txt."
+    echo "  CASE_DIR is where script verifiers resolve (default: CASE_JSON's directory)."
+    [ -n "${1:-}" ]; exit $? ;;
+esac
+[ "$#" -ge 2 ] || die "needs RUN_DIR and CASE_JSON"
+evalkit grade "$1" "$2" "${3:-$(dirname "$2")}"

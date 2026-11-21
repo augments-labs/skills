@@ -1,0 +1,419 @@
+#!/usr/bin/env bash
+# Runs a skill's behavior evals across arms and writes a workspace holding the
+# raw runs and a compact benchmark.json.
+#
+# Arms: full (the skill in skills/<pack>/<name>/ or skills/in-progress/<name>/),
+# distilled (evals/<pack>/<name>/distilled/SKILL.md), none (no skill), and
+# old_skill (the skill at --base). Every arm installs a temporary skill-only
+# bundle into an isolated harness home, so hooks stay OFF in all of them.
+set -euo pipefail
+export LC_ALL=C
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+. "$here/../lib/common.sh"
+. "$here/../lib/home-env.sh"
+. "$here/../lib/stream-text.sh"
+
+usage() {
+  cat <<'EOF'
+Usage: evals/bin/evaluate --pack PACK --skill NAME [options]
+       evals/bin/evaluate --resume DIR [--jobs N] [--timeout SECONDS] [--keep-workdirs] [--allow-unverified] [--dry-run]
+
+  --harness NAME       claude-code (default), codex, or antigravity
+  --arms LIST          full,distilled,none (default); full,old_skill for an edit
+  --base COMMIT        commit holding the old skill (required with old_skill)
+  --runs N             runs per case per arm (default 3)
+  --jobs N             sessions in parallel (default 1)
+  --eval IDS           only these case ids (comma-separated)
+  --model NAME         model passed to the harness (default: the harness default)
+  --shipped-arm ARM    record this shipped arm (full|distilled) instead of the decision table
+  --timeout SECONDS    per-session timeout (default 900)
+  --out DIR            workspace (default evals/workspaces/<stamp>-<pack>-<skill>-<harness>)
+  --resume DIR         resume an existing workspace (runs missing and refusal slots only)
+  --keep-workdirs      keep the agent work trees under TMPDIR (homes are always removed)
+  --allow-unverified   run an adapter marked runnable=no
+  --dry-run            print and price the plan; call nothing
+
+Set EVALS_COST_PER_SESSION (a number) to price the plan in your currency.
+EOF
+}
+
+pack="" skill="" harness=claude-code arms_csv=full,distilled,none base="" runs=3 jobs=1 only=""
+model="" shipped_flag="" timeout_s=900 out="" resume="" resume_set=0 plan_flag_set=0
+keep=0 allow_unverified=0 dry_run=0
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --pack) pack="${2:-}"; plan_flag_set=1; shift 2 ;;
+    --skill) skill="${2:-}"; plan_flag_set=1; shift 2 ;;
+    --harness) harness="${2:-}"; plan_flag_set=1; shift 2 ;;
+    --arms) arms_csv="${2:-}"; plan_flag_set=1; shift 2 ;;
+    --base) base="${2:-}"; plan_flag_set=1; shift 2 ;;
+    --runs) runs="${2:-}"; plan_flag_set=1; shift 2 ;;
+    --jobs) jobs="${2:-}"; shift 2 ;;
+    --eval) only="${2:-}"; plan_flag_set=1; shift 2 ;;
+    --model) model="${2:-}"; plan_flag_set=1; shift 2 ;;
+    --shipped-arm) shipped_flag="${2:-}"; plan_flag_set=1; shift 2 ;;
+    --timeout) timeout_s="${2:-}"; shift 2 ;;
+    --out) out="${2:-}"; plan_flag_set=1; shift 2 ;;
+    --resume) resume="${2:-}"; resume_set=1; shift 2 ;;
+    --keep-workdirs) keep=1; shift ;;
+    --allow-unverified) allow_unverified=1; shift ;;
+    --dry-run) dry_run=1; shift ;;
+    -h|--help) usage; exit 0 ;;
+    *) usage >&2; die "unknown option: $1" ;;
+  esac
+done
+
+require_tool git python3 jq || exit 2
+case "$jobs" in ''|0*|*[!0-9]*) die "--jobs must be a positive integer" ;; esac
+case "$timeout_s" in ''|0*|*[!0-9]*) die "--timeout must be a positive integer" ;; esac
+
+slot_resume_state() { # $1 run dir; prints keep, refusal, or missing
+  local rd="$1"
+  if ! jq -e '.outcome | type == "string"' "$rd/run_status.json" >/dev/null 2>&1; then
+    echo missing; return
+  fi
+  if jq -e '.outcome == "indeterminate" and .reason == "refusal"' "$rd/run_status.json" >/dev/null 2>&1; then
+    echo refusal; return
+  fi
+  if ! jq -e '.summary.outcome | type == "string"' "$rd/grading.json" >/dev/null 2>&1; then
+    echo missing; return
+  fi
+  echo keep
+}
+
+repo="$(repo_root)"
+case_ids=()
+if [ "$resume_set" -eq 1 ]; then
+  [ -n "$resume" ] || die "--resume needs a workspace directory"
+  [ "$plan_flag_set" -eq 0 ] || die "--resume takes settings from the workspace plan; do not combine with --pack/--skill/--harness/--arms/--base/--runs/--eval/--model/--shipped-arm/--out"
+  [ -d "$resume" ] || die "resume workspace not found: $resume"
+  ws="$(cd "$resume" && pwd -P)"
+  [ -f "$ws/plan.json" ] && jq -e '.schema_version == 1 and .hooks_enabled == false and (.cases | type == "array" and length > 0) and (.arm_order | type == "array" and length > 0)' "$ws/plan.json" >/dev/null 2>&1 \
+    || die "no valid plan.json in $ws"
+  pack="$(jq -r '.pack' "$ws/plan.json")"
+  skill="$(jq -r '.skill' "$ws/plan.json")"
+  mode="$(jq -r '.mode' "$ws/plan.json")"
+  harness="$(jq -r '.harness' "$ws/plan.json")"
+  runs="$(jq -r '.runs_per_eval' "$ws/plan.json")"
+  model="$(jq -r '.model_flag // ""' "$ws/plan.json")"
+  shipped_flag="$(jq -r '.shipped_arm_flag // ""' "$ws/plan.json")"
+  arms_csv="$(jq -r '.arm_order | join(",")' "$ws/plan.json")"
+  IFS=, read -r -a arms <<< "$arms_csv"
+  case "$runs" in ''|0*|*[!0-9]*) die "invalid runs_per_eval in $ws/plan.json" ;; esac
+  case_dir="$repo/evals/$pack/$skill"
+  [ -f "$case_dir/evals.json" ] || die "no evals at evals/$pack/$skill/evals.json"
+  full_rel="$(skill_rel_dir "$repo" "$pack" "$skill")" || die "no skill at skills/$pack/$skill/ or skills/in-progress/$skill/"
+  commit="$(git -C "$repo" rev-parse HEAD)" || die "$repo is not a git repository with a commit"
+  for a in "${arms[@]}"; do
+    case "$a" in
+      full)
+        [ -f "$ws/bundles/full/skills/$skill/SKILL.md" ] || die "missing full bundle in $ws"
+        plan_tree="$(jq -r '.arms.full.skill_tree // "null"' "$ws/plan.json")"
+        if [ "$plan_tree" != null ]; then
+          cur_tree="$(skill_tree "$repo" "$commit" "$full_rel")"
+          [ "$cur_tree" = "$plan_tree" ] || die "cannot resume: full skill tree changed ($cur_tree != $plan_tree); start a new workspace"
+        fi ;;
+      distilled)
+        [ -f "$ws/bundles/distilled/skills/$skill/SKILL.md" ] || die "missing distilled bundle in $ws"
+        plan_tree="$(jq -r '.arms.distilled.skill_tree // "null"' "$ws/plan.json")"
+        if [ "$plan_tree" != null ]; then
+          cur_tree="$(skill_tree "$repo" "$commit" "evals/$pack/$skill/distilled")"
+          [ "$cur_tree" = "$plan_tree" ] || die "cannot resume: distilled skill tree changed ($cur_tree != $plan_tree); start a new workspace"
+        fi ;;
+      old_skill)
+        [ -f "$ws/bundles/old_skill/skills/$skill/SKILL.md" ] || die "missing old_skill bundle in $ws" ;;
+      none) ;;
+      *) die "unknown arm in $ws/plan.json: $a" ;;
+    esac
+  done
+  cases_json="$(jq -c '.cases' "$ws/plan.json")"
+  while IFS= read -r id; do
+    [ -f "$ws/cases/$id.json" ] || die "missing case snapshot $ws/cases/$id.json"
+    case_ids+=("$id")
+  done < <(jq -r '.cases[].id' "$ws/plan.json")
+else
+  [ -n "$pack" ] && [ -n "$skill" ] || { usage >&2; die "--pack and --skill are required"; }
+  case "$runs" in ''|0*|*[!0-9]*) die "--runs must be a positive integer" ;; esac
+  case "$shipped_flag" in ''|full|distilled) ;; *) die "--shipped-arm must be full or distilled" ;; esac
+
+  case_dir="$repo/evals/$pack/$skill"
+  [ -f "$case_dir/evals.json" ] || die "no evals at evals/$pack/$skill/evals.json"
+  cases_json="$(evalkit cases "$case_dir/evals.json" ${only:+--only "$only"})" || die "invalid evals/$pack/$skill/evals.json"
+
+  # --- arms -----------------------------------------------------------------
+  IFS=, read -r -a arms <<< "$arms_csv"
+  seen=" "
+  for a in "${arms[@]}"; do
+    case "$a" in full|distilled|none|old_skill) ;; *) die "unknown arm: $a" ;; esac
+    case "$seen" in *" $a "*) die "arm listed twice: $a" ;; esac
+    seen="$seen$a "
+  done
+  case "$seen" in *" full "*) ;; *) die "--arms must include full" ;; esac
+  mode=promotion
+  case "$seen" in *" old_skill "*) mode=edit ;; esac
+  [ "$mode" = edit ] && [ -z "$base" ] && die "old_skill needs --base COMMIT"
+  [ "$mode" != edit ] && [ -n "$base" ] && die "--base applies only with the old_skill arm"
+  [ "$shipped_flag" = distilled ] && case "$seen" in *" distilled "*) ;; *) die "--shipped-arm distilled needs the distilled arm" ;; esac
+
+  full_rel="$(skill_rel_dir "$repo" "$pack" "$skill")" || die "no skill at skills/$pack/$skill/ or skills/in-progress/$skill/"
+  commit="$(git -C "$repo" rev-parse HEAD)" || die "$repo is not a git repository with a commit"
+  arms_json='{}'
+  add_arm() { # $1 arm $2 commit $3 tree
+    arms_json="$(jq -c --arg a "$1" --arg c "$2" --arg t "$3" \
+      '. + {($a): {commit: $c, skill_tree: (if $t == "null" then null else $t end)}}' <<< "$arms_json")"
+  }
+  for a in "${arms[@]}"; do
+    case "$a" in
+      full) add_arm full "$commit" "$(skill_tree "$repo" "$commit" "$full_rel")" ;;
+      distilled)
+        [ -f "$case_dir/distilled/SKILL.md" ] || die "the distilled arm needs evals/$pack/$skill/distilled/SKILL.md"
+        add_arm distilled "$commit" "$(skill_tree "$repo" "$commit" "evals/$pack/$skill/distilled")" ;;
+      old_skill)
+        base_commit="$(git -C "$repo" rev-parse --verify --quiet "$base^{commit}")" || die "unknown --base commit: $base"
+        old_rel="$(skill_rel_dir "$repo" "$pack" "$skill" "$base_commit")" || die "no $skill skill at $base"
+        add_arm old_skill "$base_commit" "$(skill_tree "$repo" "$base_commit" "$old_rel" committed)" ;;
+      none) arms_json="$(jq -c '. + {none: null}' <<< "$arms_json")" ;;
+    esac
+  done
+  while IFS= read -r id; do
+    case_ids+=("$id")
+  done < <(jq -r '.[].id' <<< "$cases_json")
+fi
+
+# Interleave cases across parallel slots (run -> arm -> case) so heavy cases
+# do not pile onto the same wave at --jobs > 1.
+work_items=()
+skipped_runs=0
+missing_runs=0
+refusal_runs=0
+for k in $(seq 1 "$runs"); do
+  for a in "${arms[@]}"; do
+    for id in "${case_ids[@]}"; do
+      if [ "$resume_set" -eq 1 ]; then
+        st="$(slot_resume_state "$ws/runs/$id/$a/run-$k")"
+        case "$st" in
+          keep) skipped_runs=$((skipped_runs + 1)); continue ;;
+          missing) missing_runs=$((missing_runs + 1)) ;;
+          refusal) refusal_runs=$((refusal_runs + 1)) ;;
+        esac
+      fi
+      work_items+=("$id|$a|$k")
+    done
+  done
+done
+
+# --- plan -------------------------------------------------------------------
+load_adapter "$harness" || exit 2
+n_cases="${#case_ids[@]}"
+sessions=$((n_cases * ${#arms[@]} * runs))
+to_run="${#work_items[@]}"
+if [ "$resume_set" -eq 1 ]; then
+  log "plan: resume $pack/$skill on $harness, mode=$mode, arms=${arms_csv}, runs=$runs, hooks OFF in every arm"
+  [ "$runnable" = yes ] || log "  adapter: runnable=no ($runnable_reason)"
+  log "  $to_run of $sessions session(s) to run ($skipped_runs complete, $missing_runs missing, $refusal_runs refusal), $jobs at a time"
+else
+  log "plan: $pack/$skill on $harness, mode=$mode, arms=${arms_csv}, runs=$runs, hooks OFF in every arm"
+  [ "$runnable" = yes ] || log "  adapter: runnable=no ($runnable_reason)"
+  jq -r '.[] | "  case \(.id) (\(.kind))"' <<< "$cases_json" >&2
+  log "  $n_cases case(s) x ${#arms[@]} arm(s) x $runs run(s) = $sessions agent session(s), $jobs at a time"
+fi
+log "  worst-case wall time: $(( (to_run + jobs - 1) / jobs * timeout_s / 60 )) min at --timeout $timeout_s"
+if [ -n "${EVALS_COST_PER_SESSION:-}" ]; then
+  log "  estimated cost: $(awk -v n="$to_run" -v c="$EVALS_COST_PER_SESSION" 'BEGIN { printf "%.2f", n * c }')"
+fi
+if [ "$dry_run" -eq 1 ]; then
+  log "dry run: nothing was called"
+  exit 0
+fi
+
+# --- adapter ----------------------------------------------------------------
+adapter_gate "$harness" "$allow_unverified" || exit $?
+require_tool timeout || exit 2
+harness_version="$(adapter_version 2>/dev/null || true)"
+
+if [ "$resume_set" -ne 1 ]; then
+  stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+  ws="${out:-${EVALS_WORKSPACE:-$repo/evals/workspaces}/$stamp-$pack-$skill-$harness}"
+  [ -e "$ws" ] && die "workspace already exists: $ws"
+  mkdir -p "$ws/cases" "$ws/bundles" "$ws/runs"
+  ws="$(cd "$ws" && pwd -P)"
+fi
+run_base="$(mktemp -d "${TMPDIR:-/tmp}/augments-evals-$(basename "$ws").XXXXXX")" || die "cannot create a run directory"
+# Homes hold credential copies: stop active workers and remove every home on any exit.
+active_pids=()
+done_dir=""
+cleanup_run() {
+  trap - INT TERM
+  local entry pid slot_id
+  for entry in "${active_pids[@]+"${active_pids[@]}"}"; do
+    pid="${entry%%:*}"
+    slot_id="${entry#*:}"
+    if [ -z "$done_dir" ] || [ ! -f "$done_dir/$slot_id" ]; then
+      stop_tree "$pid"
+    fi
+  done
+  for entry in "${active_pids[@]+"${active_pids[@]}"}"; do
+    wait "${entry%%:*}" 2>/dev/null || true
+  done
+  if [ -d "${run_base:-}" ]; then
+    find "$run_base" -type d -name home -prune -exec rm -rf {} + 2>/dev/null || true
+    [ -n "$done_dir" ] && rm -rf "$done_dir" 2>/dev/null || true
+    [ "${keep:-0}" -eq 1 ] || rm -rf "$run_base" 2>/dev/null || true
+  fi
+  return 0
+}
+trap cleanup_run EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+if [ "$resume_set" -ne 1 ]; then
+  jq -n --arg pack "$pack" --arg skill "$skill" --arg mode "$mode" --arg harness "$harness" \
+    --arg hv "$harness_version" --arg model "$model" --argjson runs "$runs" --arg shipped "$shipped_flag" \
+    --argjson arms "$arms_json" --arg order "$arms_csv" --argjson cases "$cases_json" --arg started "$(utc_now)" \
+    '{schema_version: 1, pack: $pack, skill: $skill, mode: $mode, harness: $harness,
+      harness_version: (if $hv == "" then null else $hv end), model_flag: (if $model == "" then null else $model end),
+      runs_per_eval: $runs, hooks_enabled: false, shipped_arm_flag: (if $shipped == "" then null else $shipped end),
+      arms: $arms, arm_order: ($order | split(",")), cases: [$cases[] | {id, kind}], started_at: $started}' \
+    > "$ws/plan.json"
+
+  for a in "${arms[@]}"; do
+    case "$a" in
+      full) build_bundle "$repo/$full_rel" "$skill" "$ws/bundles/full" ;;
+      distilled) build_bundle "$case_dir/distilled" "$skill" "$ws/bundles/distilled" ;;
+      old_skill)
+        mkdir -p "$ws/bundles/.old-src"
+        git -C "$repo" archive "$base_commit" "$old_rel" | tar -x -C "$ws/bundles/.old-src"
+        build_bundle "$ws/bundles/.old-src/$old_rel" "$skill" "$ws/bundles/old_skill"
+        rm -rf "$ws/bundles/.old-src" ;;
+      none) ;;
+    esac || die "could not build the $a bundle"
+  done
+
+  while IFS= read -r c; do
+    id="$(jq -r .id <<< "$c")"
+    printf '%s\n' "$c" > "$ws/cases/$id.json"
+  done < <(jq -c '.[]' <<< "$cases_json")
+fi
+
+now_s() { printf '%s\n' "${EPOCHREALTIME:-$(date +%s)}"; }
+
+run_one() { # $1 case file $2 arm $3 run number
+  local cf="$1" arm="$2" k="$3" id kind fixture rd base wd stream err rc=0 start end ran=0
+  local chain reason="" outcome=completed bundle=""
+  id="$(jq -r .id "$cf")"; kind="$(jq -r .kind "$cf")"; fixture="$(jq -r '.fixture // ""' "$cf")"
+  rd="$ws/runs/$id/$arm/run-$k"; base="$run_base/$id/$arm/run-$k"; wd="$base/work"
+  stream="$rd/stream.ndjson"; err="$rd/stderr.log"
+  rm -rf "$rd" && mkdir -p "$rd"; : > "$stream"; : > "$err"
+  jq -r .prompt "$cf" > "$rd/prompt.txt"
+  if [ "$arm" != none ]; then bundle="$ws/bundles/$arm"; fi
+  log "run: $id [$kind] arm=$arm run=$k"
+
+  if ! seed_workdir "$wd" "${fixture:+$case_dir/files/$fixture}"; then
+    rc=1; reason=seed_failed
+  else
+    start="$(now_s)"
+    lab_session "$base" "$bundle" behavioral "$wd" "$rd/prompt.txt" "$stream" "$err" || rc=$?
+    end="$(now_s)"
+    reason="$setup_failed"
+  fi
+
+  adapter_ran "$stream" 2>/dev/null && ran=1
+  chain="$(adapter_chain "$stream" 2>/dev/null || true)"
+  [ -n "$reason" ] || reason="$(indeterminate_reason "$rc" "$stream" "$err" "$ran" "$chain" "$arm")"
+  if [ -z "$reason" ] && ! lab_changed_files "$wd" seed > "$rd/changed-files.txt" 2>/dev/null; then
+    reason=changed_files_unavailable
+  fi
+  [ -n "$reason" ] && outcome=indeterminate
+  lab_extract_stream_text "$stream" "$harness" > "$rd/response.txt" 2>/dev/null || true
+
+  jq -n --arg outcome "$outcome" --arg reason "$reason" --argjson rc "$rc" --argjson ran "$ran" \
+    --arg chain "$chain" --arg wd "$wd" --arg arm "$arm" \
+    '{outcome: $outcome, reason: (if $reason == "" then null else $reason end), exit_status: $rc,
+      adapter_ran: ($ran == 1), skill_chain: ($chain | split("\n") | map(select(. != ""))),
+      arm: $arm, workdir: $wd, hooks_enabled: false}' > "$rd/run_status.json"
+  jq -n --arg tokens "$(adapter_output_tokens "$stream" 2>/dev/null || true)" \
+    --arg tools "$(adapter_tool_calls "$stream" 2>/dev/null || true)" \
+    --arg turns "$(adapter_turns "$stream" 2>/dev/null || true)" \
+    --arg model "$(adapter_session_model "$stream" 2>/dev/null || true)" \
+    --arg secs "$( [ -n "${start:-}" ] && awk -v a="$start" -v b="$end" 'BEGIN { printf "%.1f", b - a }')" \
+    'def num: if test("^[0-9]+(\\.[0-9]+)?$") then tonumber else null end;
+     {output_tokens: ($tokens | num), tool_calls: ($tools | num), turns: ($turns | num),
+      time_seconds: ($secs | num), model: (if $model == "" then null else $model end)}' > "$rd/metrics.json"
+
+  local graded
+  graded="$("$here/grade" "$rd" "$cf" "$case_dir")" || graded="grading failed (run counted as indeterminate)"
+  if [ "$jobs" -gt 1 ]; then
+    log "done: $id [$kind] arm=$arm run=$k -> $graded${reason:+ ($reason)}"
+  else
+    log "  -> $graded${reason:+ ($reason)}"
+  fi
+  if [ -d "$wd/.git" ]; then
+    ( cd "$wd" && git add -A >/dev/null 2>&1 && git diff --cached --binary seed > "$rd/diff.patch" 2>/dev/null ) || true
+  fi
+  if [ "$keep" -ne 1 ]; then rm -rf "$wd"; fi
+}
+
+if [ "$to_run" -eq 0 ]; then
+  :
+elif [ "$jobs" -eq 1 ]; then
+  for item in "${work_items[@]+"${work_items[@]}"}"; do
+    IFS='|' read -r id a k <<< "$item"
+    run_one "$ws/cases/$id.json" "$a" "$k"
+  done
+else
+  done_dir="$run_base/done"
+  mkdir -p "$done_dir"
+  have_wait_n=0
+  if [ "${BASH_VERSINFO[0]:-0}" -gt 4 ] \
+     || { [ "${BASH_VERSINFO[0]:-0}" -eq 4 ] && [ "${BASH_VERSINFO[1]:-0}" -ge 3 ]; }; then
+    have_wait_n=1
+  fi
+  reap_finished() {
+    local alive=() entry pid slot_id
+    for entry in "${active_pids[@]+"${active_pids[@]}"}"; do
+      pid="${entry%%:*}"
+      slot_id="${entry#*:}"
+      if [ -f "$done_dir/$slot_id" ] || ! kill -0 "$pid" 2>/dev/null; then
+        wait "$pid" 2>/dev/null || true
+        rm -f "$done_dir/$slot_id"
+      else
+        alive+=("$pid:$slot_id")
+      fi
+    done
+    active_pids=("${alive[@]+"${alive[@]}"}")
+  }
+  slot=0
+  for item in "${work_items[@]+"${work_items[@]}"}"; do
+    IFS='|' read -r id a k <<< "$item"
+    while [ "${#active_pids[@]}" -ge "$jobs" ]; do
+      reap_finished
+      [ "${#active_pids[@]}" -ge "$jobs" ] || break
+      if [ "$have_wait_n" -eq 1 ]; then
+        wait -n 2>/dev/null || true
+      else
+        sleep 0.1
+      fi
+      reap_finished
+    done
+    slot=$((slot + 1))
+    _eval_done_marker="$done_dir/$slot"
+    (
+      trap - EXIT INT TERM
+      trap ': > "$_eval_done_marker"' EXIT
+      run_one "$ws/cases/$id.json" "$a" "$k"
+    ) &
+    active_pids+=("$!:$slot")
+  done
+  for entry in "${active_pids[@]+"${active_pids[@]}"}"; do
+    wait "${entry%%:*}" 2>/dev/null || true
+  done
+  active_pids=()
+  rm -rf "$done_dir"
+fi
+
+jq --arg f "$(utc_now)" '.finished_at = $f' "$ws/plan.json" > "$ws/plan.json.tmp" && mv "$ws/plan.json.tmp" "$ws/plan.json"
+"$here/benchmark" "$ws" >/dev/null
+[ "$keep" -eq 1 ] || rm -rf "$run_base"
+log "workspace: $ws"
+log "record it with: evals/bin/report $ws"
+printf '%s\n' "$ws/benchmark.json"

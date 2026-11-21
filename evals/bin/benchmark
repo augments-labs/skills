@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Aggregates a bin/evaluate workspace into its compact benchmark.json: trap
+# pass rates per arm over scored runs only, indeterminate and needs-review
+# runs counted apart, control medians from output tokens, deltas, and the
+# shipped arm from the decision table (or the --shipped-arm flag).
+set -euo pipefail
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/../lib/common.sh"
+
+case "${1:-}" in
+  -h|--help|"")
+    echo "Usage: evals/bin/benchmark WORKSPACE"
+    echo "  Writes WORKSPACE/benchmark.json from WORKSPACE/plan.json and runs/."
+    [ -n "${1:-}" ]; exit $? ;;
+esac
+[ -f "$1/plan.json" ] || die "no plan.json in $1"
+evalkit benchmark "$1"
+printf '%s\n' "$1/benchmark.json"

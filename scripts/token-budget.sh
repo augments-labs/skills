@@ -112,8 +112,8 @@ render_table() {
   if [ "$total_skills" -eq 0 ]; then
     echo "| Pre-release skeleton (no promoted skills yet) | 0 | 0 | 0 |"
   else
-    echo "| Auto-triggered descriptions ($eng_auto_chars chars) | $eng_auto_count | — | $(((eng_auto_chars + 3) / 4)) |"
-    echo "| User-invoked descriptions ($eng_user_chars chars) | $eng_user_count | — | $(((eng_user_chars + 3) / 4)) |"
+    echo "| Auto-triggered descriptions ($eng_auto_chars chars) | $eng_auto_count | n/a | $(((eng_auto_chars + 3) / 4)) |"
+    echo "| User-invoked descriptions ($eng_user_chars chars) | $eng_user_count | n/a | $(((eng_user_chars + 3) / 4)) |"
     echo "| Promoted skill bodies (if all loaded) | $total_skills | $eng_total_words | $total_tokens |"
   fi
 }

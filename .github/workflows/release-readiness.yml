@@ -56,9 +56,20 @@ jobs:
           fi
 
           # Use merge-base so branches cut before an earlier release never false-positive.
-          mb=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
+          # The event's base SHA can predate a later push to the base branch, so
+          # prefer the live base tip.
+          base_tip=$(git rev-parse --verify -q "refs/remotes/origin/$BASE_REF" || echo "$BASE_SHA")
+          mb=$(git merge-base "$base_tip" "$HEAD_SHA")
 
-          # 2. Detect version changes across any version-bearing manifest.
+          # 2. Detect version changes across any version-bearing manifest by
+          #    comparing values, not added lines: a newly generated manifest
+          #    that carries the current version is not a bump.
+          versions_at() { # $1 rev, $2 path -> sorted unique version values
+            git show "$1:$2" 2>/dev/null |
+              sed -n 's/^[[:space:]]*"\{0,1\}version"\{0,1\}[[:space:]]*:[[:space:]]*"\{0,1\}\([^",[:space:]]*\).*/\1/p' |
+              sort -u | paste -sd ' ' -
+          }
+          base_pkg_ver=$(versions_at "$mb" package.json)
           bumped=0
           version_files="package.json .claude-plugin/marketplace.json"
           while IFS= read -r mf; do
@@ -66,7 +77,11 @@ jobs:
           done < <(git ls-tree -r --name-only "$HEAD_SHA" -- plugins 2>/dev/null | grep -E '(plugin\.json|plugin\.yaml|package\.json)$' || true)
 
           for f in $version_files; do
-            if git diff "$mb" "$HEAD_SHA" -- "$f" | grep -qE '^\+[[:space:]]*("version"[[:space:]]*:|version[[:space:]]*:)'; then
+            new=$(versions_at "$HEAD_SHA" "$f")
+            [ -n "$new" ] || continue
+            if git cat-file -e "$mb:$f" 2>/dev/null; then old=$(versions_at "$mb" "$f"); else old="$base_pkg_ver"; fi
+            if [ "$new" != "$old" ]; then
+              echo "version change in $f: '${old:-none}' -> '$new'"
               bumped=1
               break
             fi

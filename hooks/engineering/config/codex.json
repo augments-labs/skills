@@ -1,0 +1,22 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/guard-destructive-git.sh\" codex",
+            "timeoutSec": 10,
+            "statusMessage": "Checking for destructive git commands"
+          },
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/guard-protected-branch.sh\" codex",
+            "timeoutSec": 10,
+            "statusMessage": "Checking protected branches"
+          }
+        ]
+      }
+    ]
+  }
+}
