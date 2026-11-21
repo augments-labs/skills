@@ -13,6 +13,7 @@
 #   linger      activation: load the skill, then keep the session open
 #   none-loads  report a skill load even with no bundle installed
 #   sprawl      with a bundle, write an unrequested file on the typo task
+#   parallel    briefly hold an active slot and record concurrency counts
 # Every launch appends what it saw to $FAKE_STATE/launches.
 kind="$1" wd="$2" prompt="$3" bundle="$4"
 state="${FAKE_STATE:-}"
@@ -24,8 +25,11 @@ if [ -n "$state" ]; then
   printf 'kind=%s home=%s pwd=%s wd=%s bundle=%s api_key=%s leaked=%s token_file=%s\n' \
     "$kind" "$HOME" "$(pwd -P)" "$wd" "${bundle:--}" "${FAKE_API_KEY:-}" "${EVALS_TEST_SECRET:-}" "$token" \
     >> "$state/launches"
-  env | LC_ALL=C sort > "$state/env.$kind"
-  if [ -n "$bundle" ]; then (cd "$bundle" && find . -type f | LC_ALL=C sort) > "$state/bundle.$kind"; fi
+  env | LC_ALL=C sort > "$state/env.$kind.$$" && mv -f "$state/env.$kind.$$" "$state/env.$kind"
+  if [ -n "$bundle" ]; then
+    (cd "$bundle" && find . -type f | LC_ALL=C sort) > "$state/bundle.$kind.$$" \
+      && mv -f "$state/bundle.$kind.$$" "$state/bundle.$kind"
+  fi
 fi
 
 case "$mode" in
@@ -33,6 +37,15 @@ case "$mode" in
   refuse) echo "error: usage limit reached for this account" >&2; exit 1 ;;
   crash) echo "TURN"; exit 3 ;;
   sleep) echo "TURN"; sleep 30; exit 0 ;;
+  parallel)
+    if [ -n "$state" ]; then
+      mkdir -p "$state/active"
+      : > "$state/active/$$"
+      sleep 0.4
+      ls -1 "$state/active" 2>/dev/null | wc -l | tr -d ' ' >> "$state/concurrency"
+      sleep 0.4
+      rm -f "$state/active/$$"
+    fi ;;
 esac
 
 skill_md=""

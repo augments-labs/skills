@@ -19,11 +19,18 @@ mode() { printf '%s\n' "$1" > "$FAKE_STATE/mode"; }
 EVALS_COST_PER_SESSION=0.5 "$EV" "${SK[@]}" --dry-run > /dev/null 2> "$TL_TMP/dry.err"
 eq "a dry run exits 0" 0 $?
 eq "a dry run launches nothing" 0 "$(tl_launches)"
-contains "the default plan is 3 cases x 3 arms x 3 runs" "$TL_TMP/dry.err" "3 case(s) x 3 arm(s) x 3 run(s) = 27 agent session(s)"
+contains "the default plan is 3 cases x 3 arms x 3 runs" "$TL_TMP/dry.err" "3 case(s) x 3 arm(s) x 3 run(s) = 27 agent session(s), 1 at a time"
+contains "the default worst-case wall time is serial" "$TL_TMP/dry.err" "worst-case wall time: 405 min at --timeout 900"
 contains "the default arms are full,distilled,none" "$TL_TMP/dry.err" "arms=full,distilled,none"
 contains "the plan states hooks are off" "$TL_TMP/dry.err" "hooks OFF in every arm"
 contains "the plan is priced" "$TL_TMP/dry.err" "estimated cost: 13.50"
 eq "a dry run writes no workspace" "" "$(ls -A "$EVALS_WORKSPACE")"
+"$EV" "${SK[@]}" --jobs 3 --dry-run > /dev/null 2> "$TL_TMP/dry.err"
+eq "a --jobs 3 dry run exits 0" 0 $?
+contains "the --jobs 3 plan names concurrency" "$TL_TMP/dry.err" "27 agent session(s), 3 at a time"
+contains "the --jobs 3 worst-case wall time divides by jobs" "$TL_TMP/dry.err" "worst-case wall time: 135 min at --timeout 900"
+"$EV" "${SK[@]}" --jobs 4 --dry-run > /dev/null 2> "$TL_TMP/dry.err"
+contains "the --jobs 4 worst-case wall time rounds up" "$TL_TMP/dry.err" "worst-case wall time: 105 min at --timeout 900"
 FAKE_CLI_MISSING=1 FAKE_RUNNABLE=no "$EV" "${SK[@]}" --dry-run > /dev/null 2> "$TL_TMP/dry.err"
 eq "a dry run needs no CLI and no runnable adapter" 0 $?
 contains "a dry run names an unverified adapter" "$TL_TMP/dry.err" "runnable=no"
@@ -40,6 +47,10 @@ bad "old_skill without --base" --arms full,old_skill
 bad "--base without old_skill" --base HEAD
 bad "an unknown --base" --arms full,old_skill --base no-such-commit
 bad "a zero --runs" --runs 0
+bad "a zero --jobs" --jobs 0
+bad "a negative --jobs" --jobs -1
+bad "a non-numeric --jobs" --jobs abc
+bad "a leading-zero --jobs" --jobs 01
 bad "a bad --shipped-arm" --shipped-arm none
 bad "--shipped-arm distilled without the arm" --arms full,none --shipped-arm distilled
 bad "an unknown case id" --eval nope
@@ -173,6 +184,54 @@ mkdir -p "$TL_TMP/seed-file"
 printf 'x\n' > "$TL_TMP/seed-file/fake"
 EVALS_CREDENTIAL_SEED="$TL_TMP/seed-file" evaluate --runs 1 --eval rename-widget --arms full
 eq "a credential seed that is not a directory is skipped" completed "$(jq -r .outcome "$ws/runs/rename-widget/full/run-1/run_status.json")"
+
+# --- parallel runs (--jobs) ---------------------------------------------------
+: > "$FAKE_LAUNCH_LOG"; rm -rf "$FAKE_STATE/launches" "$FAKE_STATE/concurrency" "$FAKE_STATE/active"
+mode parallel
+evaluate --runs 2 --eval change-greeting --arms full,distilled,none --jobs 3
+eq "--jobs 3 parallel run exits 0" 0 "$rc"
+eq "--jobs 3 ran all 6 sessions" 6 "$(tl_launches)"
+max_conc="$(awk 'BEGIN { m = 0 } $1 + 0 > m { m = $1 + 0 } END { print m }' "$FAKE_STATE/concurrency")"
+check "--jobs 3 ran sessions concurrently (peak=${max_conc})" test "$max_conc" -ge 2
+check "--jobs 3 never exceeded the concurrency cap (peak=${max_conc})" test "$max_conc" -le 3
+eq "--jobs 3 gave every session its own HOME" 6 "$(sed -n 's/.* home=\([^ ]*\) .*/\1/p' "$FAKE_STATE/launches" | sort -u | wc -l | tr -d ' ')"
+eq "--jobs 3 removed all run directories" "" "$(ls -A "$TMPDIR")"
+contains "--jobs 3 completion logs name the run" "$TL_TMP/evaluate.err" "done: change-greeting [small_fix] arm=full run=1 -> pass"
+jeq "--jobs 3 scored all 6 small_fix runs" "$bench" '[.run_summary.full.control_small_fix.pass_rate, .run_summary.distilled.control_small_fix.pass_rate, .run_summary.none.control_small_fix.pass_rate]' '[1,1,1]'
+jeq "--jobs 3 had zero indeterminate runs" "$bench" '[.run_summary[].indeterminate_count]' '[0,0,0]'
+
+: > "$FAKE_LAUNCH_LOG"; rm -rf "$FAKE_STATE/launches" "$FAKE_STATE/concurrency" "$FAKE_STATE/active"
+mode ""
+evaluate --runs 1 --jobs 3
+eq "a parallel promotion run exits 0" 0 "$rc"
+eq "a parallel promotion run launched all 9 sessions" 9 "$(tl_launches)"
+jeq "parallel promotion trap pass rates match serial" "$bench" '[.run_summary.full.pass_rate, .run_summary.distilled.pass_rate, .run_summary.none.pass_rate]' '[1,1,0]'
+jeq "parallel promotion deltas match serial" "$bench" '.deltas' '{"full_vs_none":1,"distilled_vs_none":1,"full_vs_distilled":0}'
+jeq "parallel promotion ships distilled" "$bench" '.shipped_arm' '"distilled"'
+eq "parallel promotion removed all run directories" "" "$(ls -A "$TMPDIR")"
+
+# Signal cleanup: SIGTERM stops active parallel workers and removes homes/run dirs.
+: > "$FAKE_LAUNCH_LOG"; rm -rf "$FAKE_STATE/launches"
+mode sleep
+n=$((n + 1)); ws_sig="$TL_TMP/ws/run-$n"
+"$EV" "${SK[@]}" --out "$ws_sig" --runs 1 --eval rename-widget --arms full,distilled,none --jobs 3 --timeout 30 \
+  > "$TL_TMP/sig.out" 2> "$TL_TMP/sig.err" &
+ev_pid=$!
+waited=0
+while [ "$(tl_launches)" -lt 3 ] && [ "$waited" -lt 100 ]; do
+  sleep 0.1
+  waited=$((waited + 1))
+done
+eq "SIGTERM test saw all 3 parallel workers launch" 3 "$(tl_launches)"
+SECONDS=0
+kill -TERM "$ev_pid" 2>/dev/null || true
+sig_rc=0
+wait "$ev_pid" 2>/dev/null || sig_rc=$?
+sig_took=$SECONDS
+check "SIGTERM exits nonzero (rc=${sig_rc})" test "$sig_rc" -ne 0
+check "SIGTERM stopped workers promptly (${sig_took}s)" test "$sig_took" -lt 10
+eq "SIGTERM removed every isolated home and run dir" "" "$(ls -A "$TMPDIR")"
+mode ""
 
 # --- edit mode: full vs the skill at --base ----------------------------------
 erepo="$(tl_make_repo edit-repo)" || tl_done
