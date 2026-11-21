@@ -6,6 +6,11 @@ All notable changes to `augments-labs/skills` are documented here. Entries follo
 
 ## [Unreleased]
 
+- `debugging` now writes the code fallback you ask for when the cause is bad
+  data, a permission, or infrastructure. It keeps the fallback to the inputs
+  that fail today and still reports the upstream cause, instead of stopping
+  to ask.
+
 ## [0.1.1] - 2026-11-21
 
 - `writing-skills` skill in the engineering pack: writes skills that load, with

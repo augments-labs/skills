@@ -73,7 +73,7 @@ Every promoted skill body under `skills/engineering/` is capped at 200 lines, 2,
 | --- | --- | --- | --- |
 | Auto-triggered descriptions (1801 chars) | 3 | n/a | 451 |
 | User-invoked descriptions (0 chars) | 0 | n/a | 0 |
-| Promoted skill bodies (if all loaded) | 3 | 3020 | 4375 |
+| Promoted skill bodies (if all loaded) | 3 | 3047 | 4414 |
 <!-- token-budget-table:end -->
 
 <!-- eval-scoreboard:start -->
