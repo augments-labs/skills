@@ -454,6 +454,58 @@ eq "the resumed run reruns the session and its triggering" 7 "$(tl_launches)"
 jeq "the resumed run is scored" "$ws_ref/runs/write-gadget-skill/full/run-1/grading.json" '.summary.outcome' '"pass"'
 tl_use_fake "$repo"
 
+# --- composite: the skill beside every promoted skill of its pack -------------
+prepo="$(tl_make_repo pack-repo)" || tl_done
+tl_use_fake "$prepo"
+bad "a pack arm with no other promoted skill" --arms pack
+mkdir -p "$prepo/skills/engineering/zz-helper"
+printf -- '---\nname: zz-helper\ndescription: "Use when tidying gadgets."\n---\n\nTidy gadgets.\n' \
+  > "$prepo/skills/engineering/zz-helper/SKILL.md"
+( cd "$prepo" && tl_git add -A && tl_git commit -qm "promote zz-helper" ) || not_ok "commit zz-helper"
+bad "a pack arm beside distilled" --arms pack,distilled
+bad "a pack arm beside old_skill" --arms pack,old_skill --base HEAD
+bad "--shipped-arm on a composite run" --arms pack --shipped-arm full
+"$EV" "${SK[@]}" --arms pack --dry-run > /dev/null 2> "$TL_TMP/dry.err"
+eq "a pack-only dry run exits 0" 0 $?
+contains "the pack-only plan is a composite" "$TL_TMP/dry.err" "mode=composite, arms=pack"
+evaluate --runs 1 --arms full,pack,none
+eq "a composite run exits 0" 0 "$rc"
+eq "it ran 3 cases x 3 arms x 1 run" 9 "$(tl_launches)"
+phead="$(git -C "$prepo" rev-parse HEAD)"
+jeq "composite mode ships no arm but pack" "$bench" '[.mode, .shipped_arm]' '["composite","pack"]'
+jeq "the pack arm binds every pack skill's tree" "$bench" '.arms.pack' \
+  "{\"commit\":\"$phead\",\"skill_tree\":\"$(git -C "$prepo" rev-parse HEAD:skills/in-progress/demo-skill)\",\"pack_skills\":{\"demo-skill\":\"$(git -C "$prepo" rev-parse HEAD:skills/in-progress/demo-skill)\",\"zz-helper\":\"$(git -C "$prepo" rev-parse HEAD:skills/engineering/zz-helper)\"}}"
+check "the pack bundle holds the skill" test -f "$ws/bundles/pack/skills/demo-skill/SKILL.md"
+check "the pack bundle holds the promoted skill" test -f "$ws/bundles/pack/skills/zz-helper/SKILL.md"
+check "the pack bundle carries no hooks" test ! -e "$ws/bundles/pack/skills/demo-skill/hooks"
+jeq "composite deltas" "$bench" '.deltas' '{"full_vs_none":1,"pack_vs_full":0,"pack_vs_none":1}'
+jeq "skill_loads counts the runs that loaded each skill" "$bench" '.skill_loads.pack' \
+  '{"rename-widget":{"demo-skill":1},"fix-readme-typo":{},"change-greeting":{}}'
+jeq "the none arm loads nothing" "$bench" '[.skill_loads.none[] | length] | add' 0
+contains "a quiet pack is named" "$TL_TMP/evaluate.err" "pack arm loaded no other skill"
+"$TL_EVALS/bin/report" "$ws" > /dev/null 2> "$TL_TMP/report.err"
+check "report refuses a composite record" test $? -ne 0
+contains "the refusal says why" "$TL_TMP/report.err" "not a promotion record"
+mkdir -p "$prepo/skills/engineering/aa-helper"
+printf -- '---\nname: aa-helper\ndescription: "Use when renaming any widget."\n---\n\nRename widgets by hand.\n' \
+  > "$prepo/skills/engineering/aa-helper/SKILL.md"
+( cd "$prepo" && tl_git add -A && tl_git commit -qm "promote aa-helper" ) || not_ok "commit aa-helper"
+evaluate --runs 1 --arms pack
+eq "a pack-only run exits 0" 0 "$rc"
+jeq "a competing skill takes the case" "$bench" '[.run_summary.pack.pass_rate, .skill_loads.pack["rename-widget"]]' '[0,{"aa-helper":1}]'
+contains "cross-triggering is named" "$TL_TMP/evaluate.err" "pack arm loaded other skills: aa-helper"
+ws_pack="$ws"
+: > "$FAKE_LAUNCH_LOG"
+"$EV" --resume "$ws_pack" > /dev/null 2> "$TL_TMP/resume.err"
+eq "a complete composite resumes with nothing to run" 0 "$(tl_launches)"
+printf '\nA new line.\n' >> "$prepo/skills/engineering/zz-helper/SKILL.md"
+( cd "$prepo" && tl_git commit -qam "edit zz-helper" ) || not_ok "commit zz-helper edit"
+rm -rf "$ws_pack/runs/rename-widget"
+"$EV" --resume "$ws_pack" > /dev/null 2> "$TL_TMP/resume.err"
+check "resume refuses a changed pack skill" test $? -ne 0
+contains "the refusal names the changed skill" "$TL_TMP/resume.err" "zz-helper skill tree changed"
+tl_use_fake "$repo"
+
 # --- edit mode: full vs the skill at --base ----------------------------------
 erepo="$(tl_make_repo edit-repo)" || tl_done
 tl_use_fake "$erepo"

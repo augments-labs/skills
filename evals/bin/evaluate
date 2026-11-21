@@ -3,9 +3,14 @@
 # raw runs and a compact benchmark.json.
 #
 # Arms: full (the skill in skills/<pack>/<name>/ or skills/in-progress/<name>/),
-# distilled (evals/<pack>/<name>/distilled/SKILL.md), none (no skill), and
-# old_skill (the skill at --base). Every arm installs a temporary skill-only
+# distilled (evals/<pack>/<name>/distilled/SKILL.md), none (no skill),
+# old_skill (the skill at --base), and pack (the skill installed beside every
+# promoted skill of its pack). Every arm installs a temporary skill-only
 # bundle into an isolated harness home, so hooks stay OFF in all of them.
+#
+# A run with the pack arm is a composite check, not a promotion record: it
+# shows whether the skill still works, and stays quiet on the controls, when
+# the whole pack competes for the same session.
 #
 # A case with a skill-triggering assertion asks the agent to write a skill:
 # after its session, evals/bin/triggering scores the skill the run wrote on
@@ -23,7 +28,8 @@ Usage: evals/bin/evaluate --pack PACK --skill NAME [options]
        evals/bin/evaluate --resume DIR [--jobs N] [--timeout SECONDS] [--keep-workdirs] [--allow-unverified] [--dry-run]
 
   --harness NAME       claude-code (default), codex, or antigravity
-  --arms LIST          full,distilled,none (default); full,old_skill for an edit
+  --arms LIST          full,distilled,none (default); full,old_skill for an edit;
+                       pack (alone or with full,none) for a composite pack check
   --base COMMIT        commit holding the old skill (required with old_skill)
   --runs N             runs per case per arm (default 3)
   --jobs N             sessions in parallel (default 1)
@@ -127,6 +133,13 @@ if [ "$resume_set" -eq 1 ]; then
         fi ;;
       old_skill)
         [ -f "$ws/bundles/old_skill/skills/$skill/SKILL.md" ] || die "missing old_skill bundle in $ws" ;;
+      pack)
+        [ -f "$ws/bundles/pack/skills/$skill/SKILL.md" ] || die "missing pack bundle in $ws"
+        while IFS=$'\t' read -r pn pt; do
+          [ "$pt" != null ] || continue
+          cur_tree="$(skill_tree "$repo" "$commit" "$(skill_rel_dir "$repo" "$pack" "$pn")")"
+          [ "$cur_tree" = "$pt" ] || die "cannot resume: $pn skill tree changed ($cur_tree != $pt); start a new workspace"
+        done < <(jq -r '.arms.pack.pack_skills | to_entries[] | [.key, (.value // "null")] | @tsv' "$ws/plan.json") ;;
       none) ;;
       *) die "unknown arm in $ws/plan.json: $a" ;;
     esac
@@ -150,13 +163,20 @@ else
   IFS=, read -r -a arms <<< "$arms_csv"
   seen=" "
   for a in "${arms[@]}"; do
-    case "$a" in full|distilled|none|old_skill) ;; *) die "unknown arm: $a" ;; esac
+    case "$a" in full|distilled|none|old_skill|pack) ;; *) die "unknown arm: $a" ;; esac
     case "$seen" in *" $a "*) die "arm listed twice: $a" ;; esac
     seen="$seen$a "
   done
-  case "$seen" in *" full "*) ;; *) die "--arms must include full" ;; esac
   mode=promotion
   case "$seen" in *" old_skill "*) mode=edit ;; esac
+  case "$seen" in
+    *" pack "*)
+      mode=composite
+      case "$seen" in *" distilled "*|*" old_skill "*) die "the pack arm combines only with full and none" ;; esac
+      [ -z "$shipped_flag" ] || die "--shipped-arm does not apply to a composite run" ;;
+    *" full "*) ;;
+    *) die "--arms must include full (or pack, for a composite check)" ;;
+  esac
   [ "$mode" = edit ] && [ -z "$base" ] && die "old_skill needs --base COMMIT"
   [ "$mode" != edit ] && [ -n "$base" ] && die "--base applies only with the old_skill arm"
   [ "$shipped_flag" = distilled ] && case "$seen" in *" distilled "*) ;; *) die "--shipped-arm distilled needs the distilled arm" ;; esac
@@ -179,6 +199,21 @@ else
         old_rel="$(skill_rel_dir "$repo" "$pack" "$skill" "$base_commit")" || die "no $skill skill at $base"
         add_arm old_skill "$base_commit" "$(skill_tree "$repo" "$base_commit" "$old_rel" committed)" ;;
       none) arms_json="$(jq -c '. + {none: null}' <<< "$arms_json")" ;;
+      pack)
+        # Every promoted skill of the pack, plus the skill itself when it is
+        # still in progress; pack_skills binds each one's tree.
+        pack_json='{}'
+        for d in "$repo/skills/$pack"/*/; do
+          pn="$(basename "$d")"
+          [ -f "$d/SKILL.md" ] || continue
+          pack_json="$(jq -c --arg n "$pn" --arg t "$(skill_tree "$repo" "$commit" "skills/$pack/$pn")" \
+            '. + {($n): (if $t == "null" then null else $t end)}' <<< "$pack_json")"
+        done
+        pack_json="$(jq -cS --arg n "$skill" --arg t "$(skill_tree "$repo" "$commit" "$full_rel")" \
+          '. + {($n): (if $t == "null" then null else $t end)}' <<< "$pack_json")"
+        [ "$(jq length <<< "$pack_json")" -gt 1 ] || die "the pack arm needs at least one other promoted skill in skills/$pack/"
+        add_arm pack "$commit" "$(skill_tree "$repo" "$commit" "$full_rel")"
+        arms_json="$(jq -c --argjson p "$pack_json" '.pack.pack_skills = $p' <<< "$arms_json")" ;;
     esac
   done
   while IFS= read -r id; do
@@ -307,6 +342,11 @@ if [ "$resume_set" -ne 1 ]; then
         git -C "$repo" archive "$base_commit" "$old_rel" | tar -x -C "$ws/bundles/.old-src"
         build_bundle "$ws/bundles/.old-src/$old_rel" "$skill" "$ws/bundles/old_skill"
         rm -rf "$ws/bundles/.old-src" ;;
+      pack)
+        while IFS= read -r pn; do
+          prel="$(skill_rel_dir "$repo" "$pack" "$pn")" && build_bundle "$repo/$prel" "$pn" "$ws/bundles/pack" \
+            || die "could not build the pack bundle ($pn)"
+        done < <(jq -r '.pack.pack_skills | keys[]' <<< "$arms_json") ;;
       none) ;;
     esac || die "could not build the $a bundle"
   done
