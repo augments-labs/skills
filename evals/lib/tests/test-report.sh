@@ -8,7 +8,6 @@ RP="$TL_EVALS/bin/report"
 # --- the real README ----------------------------------------------------------
 ( unset EVALS_REPO_ROOT; "$RP" --scoreboard --check ) > "$TL_TMP/real.out" 2>&1
 eq "the repository README scoreboard is current" 0 $?
-contains "an empty results dir keeps the pending row" "$TL_ROOT/README.md" "| *(Pending first evaluated promotion for \`v0.0.1\`)* | n/a | n/a | n/a | n/a | n/a | n/a |"
 
 # --- a fixture repository -----------------------------------------------------
 repo="$(tl_make_repo repo)" || tl_done
@@ -33,6 +32,7 @@ cp "$readme" "$TL_TMP/README.orig"
 report --scoreboard
 eq "--scoreboard with no records exits 0" 0 "$rc"
 check "--scoreboard with no records leaves the README byte-identical" cmp -s "$readme" "$TL_TMP/README.orig"
+contains "an empty results dir keeps the pending row" "$readme" "| *(Pending first evaluated promotion for \`v0.0.1\`)* | n/a | n/a | n/a | n/a | n/a | n/a |"
 report --scoreboard --check
 eq "--check passes with no records" 0 "$rc"
 report --scoreboard --bogus
