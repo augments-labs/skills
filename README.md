@@ -107,19 +107,6 @@ codex plugin add engineering-skills@augments-labs
 agy plugin install https://github.com/augments-labs/skills/tree/main/plugins/engineering-skills
 ```
 
-### Cursor
-
-```bash
-git clone https://github.com/augments-labs/skills.git /tmp/augments-skills
-cp -R /tmp/augments-skills/plugins/engineering-skills ~/.cursor/plugins/local/engineering-skills
-```
-
-### Devin
-
-```bash
-devin plugins install augments-labs/skills#plugins/engineering-skills
-```
-
 ### Skill-only install (`npx skills`)
 
 ```bash
@@ -128,9 +115,9 @@ npx skills add augments-labs/skills/plugins/engineering-skills
 
 > Note: `npx skills add` installs `SKILL.md` files only, without deterministic hooks. For hook enforcement, install through your harness's plugin mechanism above. [`docs/hooks.md`](docs/hooks.md) lists what the hooks block and how to turn them off.
 
-### Additional harnesses (OpenCode, pi, Kimi Code, Hermes, Grok Build, Muse Code)
+### Other harnesses
 
-Support for OpenCode (1.x/2.x), pi, Kimi Code, Hermes, Grok Build, and Muse Code will be documented in [`docs/`](docs/README.md), with verified install commands, as each harness adapter passes live smoke tests. On Hermes, answer "no" if you are prompted about `package.json` Node dependencies. Zero dependencies are required. Harnesses that install from the repository root load `engineering-skills` by default.
+Native plugin bundles for Cursor, Devin, OpenCode, pi, Kimi Code, Hermes, Grok Build, and Muse Code are planned for the next release. Until then, use the skill-only install above on harnesses that read Agent Skills.
 
 ## Documentation
 
