@@ -18,10 +18,14 @@ from datetime import datetime, timezone
 
 KINDS = ("trap", "non_trigger", "small_fix")
 ASSERTION_TYPES = ("file-exists", "file-contains", "file-not-contains",
-                   "command-succeeds", "git-count", "script")
-ARMS = ("full", "distilled", "none", "old_skill")
+                   "command-succeeds", "git-count", "script", "skill-triggering")
+ARMS = ("full", "distilled", "none", "old_skill", "pack")
 SPLITS = ("train", "validation", "holdout", "negative")
 ID_RE = re.compile(r"^[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?$")
+SKILL_NAME_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
+# skill-triggering defaults: runs per query and the trigger-rate threshold.
+WRITTEN_SKILL_RUNS = 3
+WRITTEN_SKILL_THRESHOLD = 0.5
 
 # Decision table (evals/README.md): distilled ships when it beats none by at
 # least this much, passes both control gates, and full adds less than
@@ -119,6 +123,21 @@ def validate_assertion(a, where, case_dir):
             safe_rel(a["path"], where)
             if not os.path.isfile(os.path.join(case_dir, a["path"])):
                 raise Invalid(f"{where}: verifier not found: {a['path']}")
+    if t == "skill-triggering":
+        safe_rel(a.get("path"), where)
+        safe_rel(a.get("queries"), where)
+        qpath = os.path.join(case_dir, a["queries"])
+        if not os.path.isfile(qpath):
+            raise Invalid(f"{where}: queries file not found: {a['queries']}")
+        try:
+            load_queries(qpath, False)
+        except Invalid as e:
+            raise Invalid(f"{where}: {a['queries']}: {e}")
+        if "runs" in a and (not isinstance(a["runs"], int) or isinstance(a["runs"], bool) or a["runs"] < 1):
+            raise Invalid(f"{where}: skill-triggering 'runs' must be a positive integer")
+        thr = a.get("threshold", WRITTEN_SKILL_THRESHOLD)
+        if isinstance(thr, bool) or not isinstance(thr, (int, float)) or not 0 < thr < 1:
+            raise Invalid(f"{where}: skill-triggering 'threshold' must be between 0 and 1")
 
 
 def load_cases(evals_path, only=None):
@@ -224,8 +243,32 @@ def scratch_home():
     return _SCRATCH[0].name
 
 
-def grade_assertion(a, workdir, run_dir, case_dir):
+def grade_written_skill(tdir):
+    """Grades a skill-triggering assertion from what evals/bin/evaluate saved
+    in <run>/triggering-<i>/: the written skill's triggering on its queries."""
+    for name, status in (("invalid.txt", "fail"), ("error.txt", "needs_review")):
+        p = os.path.join(tdir, name)
+        if os.path.isfile(p):
+            with open(p, encoding="utf-8", errors="replace") as f:
+                return status, f.read().strip()[:400]
+    qr = os.path.join(tdir, "query-results.json")
+    if not os.path.isfile(qr):
+        return "needs_review", "the written skill's triggering was not run"
+    rows = load_json(qr)
+    detail = ", ".join(
+        f"{label} {sum(r['verdict'] == 'pass' for r in rows if r['should_trigger'] == want)}"
+        f"/{sum(r['should_trigger'] == want for r in rows)}"
+        for label, want in (("should-trigger", True), ("should-not", False)))
+    verdicts = Counter(r["verdict"] for r in rows)
+    if verdicts["inconclusive"]:
+        return "needs_review", f"{detail}, {verdicts['inconclusive']} inconclusive"
+    return ("fail" if verdicts["fail"] else "pass"), detail
+
+
+def grade_assertion(a, workdir, run_dir, case_dir, index=0):
     t = a["type"]
+    if t == "skill-triggering":
+        return grade_written_skill(os.path.join(run_dir, f"triggering-{index}"))
     changed_path = os.path.join(run_dir, "changed-files.txt")
     if t in ("file-exists", "file-contains", "file-not-contains"):
         full = inside(workdir, a["path"])
@@ -302,7 +345,7 @@ def cmd_grade(args):
                    "total": len(case["assertions"]), "pass_rate": None}
     else:
         for i, a in enumerate(case["assertions"]):
-            st, detail = grade_assertion(a, status["workdir"], run_dir, case_dir)
+            st, detail = grade_assertion(a, status["workdir"], run_dir, case_dir, i)
             results.append({"index": i, "type": a["type"], "description": a.get("description", ""),
                             "status": st, "detail": detail})
         c = Counter(r["status"] for r in results)
@@ -356,6 +399,7 @@ def collect_runs(ws, plan):
                     "outcome": outcome, "status": status, "metrics": metrics,
                     "unrequested": len((grading or {}).get("controls", {}).get("unrequested_files", [])),
                     "loaded": bool(status.get("skill_chain")),
+                    "chain": [s for s in status.get("skill_chain") or [] if isinstance(s, str)],
                 })
     return out
 
@@ -435,6 +479,8 @@ def delta(summary, a, b):
 
 def decide(plan, summary, deltas):
     notes = []
+    if plan["mode"] == "composite":
+        return "pack", ["composite pack check: not a promotion record"]
     if plan.get("shipped_arm_flag"):
         return plan["shipped_arm_flag"], [f"shipped_arm set by flag: {plan['shipped_arm_flag']}"]
     if plan["mode"] == "edit" or "distilled" not in summary:
@@ -458,7 +504,8 @@ def cmd_benchmark(args):
     summary = {arm: summarize_arm(plan["cases"], runs[arm]) for arm in plan["arm_order"]}
     deltas = {}
     for key, a, b in (("full_vs_none", "full", "none"), ("distilled_vs_none", "distilled", "none"),
-                      ("full_vs_distilled", "full", "distilled"), ("full_vs_old_skill", "full", "old_skill")):
+                      ("full_vs_distilled", "full", "distilled"), ("full_vs_old_skill", "full", "old_skill"),
+                      ("pack_vs_full", "pack", "full"), ("pack_vs_none", "pack", "none")):
         if a in summary and b in summary:
             deltas[key] = delta(summary, a, b)
     shipped, notes = decide(plan, summary, deltas)
@@ -480,6 +527,18 @@ def cmd_benchmark(args):
             for arm in plan["arm_order"]}} for c in plan["cases"]],
         "deltas": deltas,
     }
+    if plan["mode"] == "composite":
+        # Which skills each case loaded, per arm: the number of runs that
+        # loaded each one. Any load on a non_trigger case, and any skill but
+        # the one under test, is cross-triggering to read before promotion.
+        record["skill_loads"] = {arm: {c["id"]: dict(sorted(Counter(
+            s for r in runs[arm][c["id"]] for s in set(r["chain"])).items()))
+            for c in plan["cases"]} for arm in plan["arm_order"]}
+        if "none" in summary:
+            notes += [f"pack control gate: {w}" for w in control_failures(summary["pack"], summary["none"])]
+        others = sorted({s for loads in record["skill_loads"]["pack"].values() for s in loads} - {plan["skill"]})
+        notes.append(f"pack arm loaded other skills: {', '.join(others)}" if others
+                     else "pack arm loaded no other skill")
     dump_json(record, os.path.join(ws, "benchmark.json"))
     for n in notes:
         print(f"decision: {n}", file=sys.stderr)
@@ -568,6 +627,56 @@ def cmd_set_description(args):
         raise Invalid(f"{path}: no description line to replace")
     with open(path, "w", encoding="utf-8") as f:
         f.write("\n".join(lines))
+
+
+def cmd_written_skill(args):
+    """Prints the one skill directory a run wrote under a glob in its work
+    tree, or why there is no usable one (exit 1)."""
+    workdir, pattern = args
+    safe_rel(pattern, "path")
+    root = os.path.realpath(workdir)
+    found = []
+    for md in glob.glob(os.path.join(root, pattern, "SKILL.md")):
+        d = os.path.dirname(md)
+        if os.path.isfile(md) and inside(root, os.path.relpath(d, root)):
+            found.append(d)
+    found.sort()
+    if len(found) != 1:
+        rels = ", ".join(os.path.relpath(d, root) for d in found)
+        print(f"expected one skill at {pattern}/SKILL.md, found {len(found)}" + (f": {rels}" if rels else ""))
+        sys.exit(1)
+    d = found[0]
+    try:
+        meta = skill_meta(os.path.join(d, "SKILL.md"))
+    except Invalid as e:
+        print(str(e).replace(root + os.sep, ""))
+        sys.exit(1)
+    name, base = meta["name"] or "", os.path.basename(d)
+    if len(name) > 64 or not SKILL_NAME_RE.match(name):
+        print(f"{os.path.relpath(d, root)}: name {name!r} is not a valid skill name")
+        sys.exit(1)
+    if name != base:
+        print(f"{os.path.relpath(d, root)}: name {name!r} does not match its directory {base!r}")
+        sys.exit(1)
+    print(d)
+
+
+def cmd_trigger_plan(args):
+    """Lists the skill-triggering assertions of one or more cases (a case
+    file, a list, or - for stdin) with the sessions each costs per run."""
+    case_dir, src = args
+    data = json.load(sys.stdin) if src == "-" else load_json(src)
+    out = []
+    for case in data if isinstance(data, list) else [data]:
+        for i, a in enumerate(case.get("assertions", [])):
+            if a.get("type") != "skill-triggering":
+                continue
+            qpath = os.path.join(os.path.realpath(case_dir), a["queries"])
+            runs = a.get("runs", WRITTEN_SKILL_RUNS)
+            out.append({"case": case["id"], "index": i, "path": a["path"], "queries": qpath,
+                        "runs": runs, "threshold": a.get("threshold", WRITTEN_SKILL_THRESHOLD),
+                        "sessions": len(load_queries(qpath, False)) * runs})
+    dump_json(out)
 
 
 # ------------------------------------------------------------ triggering ----
@@ -676,6 +785,8 @@ def cmd_record_name(args):
         if not isinstance(rec.get(k), str) or not re.match(r"^[a-z0-9][a-z0-9-]*$", rec[k]):
             raise Invalid(f"'{k}' must be kebab-case")
     if base == "benchmark.json":
+        if rec.get("mode") == "composite":
+            raise Invalid("a composite pack check is not a promotion record; keep it in its workspace")
         if rec.get("hooks_enabled") is not False:
             raise Invalid("hooks_enabled must be false")
         for arm, ident in rec.get("arms", {}).items():
@@ -795,6 +906,7 @@ COMMANDS = {
     "skill-meta": cmd_skill_meta, "check-candidate": cmd_check_candidate,
     "set-description": cmd_set_description, "queries": cmd_queries,
     "triggering": cmd_triggering, "record-name": cmd_record_name, "scoreboard": cmd_scoreboard,
+    "written-skill": cmd_written_skill, "trigger-plan": cmd_trigger_plan,
 }
 
 

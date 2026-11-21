@@ -403,6 +403,109 @@ eq "a resumed follow-up session exits 0" 0 "$rc"
 eq "a resumed session sends its follow-ups" 3 "$(tl_launches)"
 jeq "a resumed follow-up session is scored" "$ws_fu/benchmark.json" '.run_summary.full.pass_rate' 1
 
+# --- a skill the run writes is scored on its triggering ---------------------
+wrepo="$(tl_make_repo write-repo)" || tl_done
+tl_use_fake "$wrepo"
+wcase="$wrepo/evals/engineering/demo-skill"
+printf '%s\n' '{"fixture": "app", "queries": [
+  {"query": "Rename the widget called oldWidget", "should_trigger": true, "split": "train"},
+  {"query": "Rename the gadget called oldGadget", "should_trigger": true, "split": "validation"},
+  {"query": "Write a haiku about rain", "should_trigger": false, "split": "train"}]}' > "$wcase/written-queries.json"
+jq '.evals += [{"id": "write-gadget-skill", "kind": "trap", "fixture": "app",
+  "prompt": "Write a skill for renaming a widget in this app.",
+  "assertions": [{"type": "skill-triggering", "path": ".agents/skills/*", "queries": "written-queries.json", "runs": 2}]}]' \
+  "$wcase/evals.json" > "$wcase/evals.json.tmp" && mv "$wcase/evals.json.tmp" "$wcase/evals.json"
+( cd "$wrepo" && tl_git add -A && tl_git commit -qm "a written-skill case" ) || not_ok "commit the written-skill case"
+EVALS_COST_PER_SESSION=1 "$EV" "${SK[@]}" --eval write-gadget-skill --arms full,none --runs 1 --dry-run > /dev/null 2> "$TL_TMP/dry.err"
+contains "a dry run counts the written skills' triggering sessions" "$TL_TMP/dry.err" "+ up to 12 triggering session(s) scoring the skills the runs write"
+contains "a dry run prices them" "$TL_TMP/dry.err" "estimated cost: 14.00"
+EVALS_COST_PER_SESSION=1 "$EV" "${SK[@]}" --eval rename-widget --runs 1 --dry-run > /dev/null 2> "$TL_TMP/dry.err"
+lacks "a plan without one counts none" "$TL_TMP/dry.err" "triggering session"
+: > "$FAKE_LAUNCH_LOG"
+evaluate --runs 1 --eval write-gadget-skill --arms full,none
+eq "a written-skill run exits 0" 0 "$rc"
+eq "each run's skill is scored on 3 queries x 2 runs" 14 "$(tl_launches)"
+eq "the triggering sessions are activations" 12 "$(grep -c '^launch kind=activation ' "$FAKE_LAUNCH_LOG")"
+jeq "the skill written with the skill loaded routes every query" "$bench" '[.run_summary.full.pass_rate, .run_summary.none.pass_rate]' '[1,0]'
+wr="$ws/runs/write-gadget-skill"
+jeq "full: the written skill triggers on both plain requests" "$wr/full/run-1/grading.json" '.assertion_results[0] | [.status, .detail]' \
+  '["pass","should-trigger 2/2, should-not 1/1"]'
+jeq "none: the narrow skill misses the gadget request" "$wr/none/run-1/grading.json" '.assertion_results[0] | [.status, .detail]' \
+  '["fail","should-trigger 1/2, should-not 1/1"]'
+jeq "the triggering record names the written skill" "$wr/full/run-1/triggering-0/triggering.json" '[.skill, .runs, .plugin.skill_tree, .harness]' \
+  '["gadget-helper",2,null,"fake"]'
+check "the triggering log is kept" test -s "$wr/full/run-1/triggering-0.log"
+check "the run's diff holds the written skill" grep -qF '.agents/skills/gadget-helper/SKILL.md' "$wr/full/run-1/diff.patch"
+mode skill-misnamed
+: > "$FAKE_LAUNCH_LOG"
+evaluate --runs 1 --eval write-gadget-skill --arms full
+eq "a misnamed skill runs no triggering session" 1 "$(tl_launches)"
+jeq "a misnamed skill fails" "$ws/runs/write-gadget-skill/full/run-1/grading.json" '.assertion_results[0] | [.status, .detail]' \
+  "[\"fail\",\".agents/skills/gadget-helper: name 'gadget-helpers' does not match its directory 'gadget-helper'\"]"
+mode refuse-activation
+evaluate --runs 1 --eval write-gadget-skill --arms full
+jeq "a refusal that leaves a query unscored makes the run resumable" "$ws/runs/write-gadget-skill/full/run-1/run_status.json" \
+  '[.outcome, .reason]' '["indeterminate","refusal"]'
+ws_ref="$ws"
+mode ""
+: > "$FAKE_LAUNCH_LOG"
+"$EV" --resume "$ws_ref" > /dev/null 2> "$TL_TMP/resume.err"
+eq "the resumed run reruns the session and its triggering" 7 "$(tl_launches)"
+jeq "the resumed run is scored" "$ws_ref/runs/write-gadget-skill/full/run-1/grading.json" '.summary.outcome' '"pass"'
+tl_use_fake "$repo"
+
+# --- composite: the skill beside every promoted skill of its pack -------------
+prepo="$(tl_make_repo pack-repo)" || tl_done
+tl_use_fake "$prepo"
+bad "a pack arm with no other promoted skill" --arms pack
+mkdir -p "$prepo/skills/engineering/zz-helper"
+printf -- '---\nname: zz-helper\ndescription: "Use when tidying gadgets."\n---\n\nTidy gadgets.\n' \
+  > "$prepo/skills/engineering/zz-helper/SKILL.md"
+( cd "$prepo" && tl_git add -A && tl_git commit -qm "promote zz-helper" ) || not_ok "commit zz-helper"
+bad "a pack arm beside distilled" --arms pack,distilled
+bad "a pack arm beside old_skill" --arms pack,old_skill --base HEAD
+bad "--shipped-arm on a composite run" --arms pack --shipped-arm full
+"$EV" "${SK[@]}" --arms pack --dry-run > /dev/null 2> "$TL_TMP/dry.err"
+eq "a pack-only dry run exits 0" 0 $?
+contains "the pack-only plan is a composite" "$TL_TMP/dry.err" "mode=composite, arms=pack"
+evaluate --runs 1 --arms full,pack,none
+eq "a composite run exits 0" 0 "$rc"
+eq "it ran 3 cases x 3 arms x 1 run" 9 "$(tl_launches)"
+phead="$(git -C "$prepo" rev-parse HEAD)"
+jeq "composite mode ships no arm but pack" "$bench" '[.mode, .shipped_arm]' '["composite","pack"]'
+jeq "the pack arm binds every pack skill's tree" "$bench" '.arms.pack' \
+  "{\"commit\":\"$phead\",\"skill_tree\":\"$(git -C "$prepo" rev-parse HEAD:skills/in-progress/demo-skill)\",\"pack_skills\":{\"demo-skill\":\"$(git -C "$prepo" rev-parse HEAD:skills/in-progress/demo-skill)\",\"zz-helper\":\"$(git -C "$prepo" rev-parse HEAD:skills/engineering/zz-helper)\"}}"
+check "the pack bundle holds the skill" test -f "$ws/bundles/pack/skills/demo-skill/SKILL.md"
+check "the pack bundle holds the promoted skill" test -f "$ws/bundles/pack/skills/zz-helper/SKILL.md"
+check "the pack bundle carries no hooks" test ! -e "$ws/bundles/pack/skills/demo-skill/hooks"
+jeq "composite deltas" "$bench" '.deltas' '{"full_vs_none":1,"pack_vs_full":0,"pack_vs_none":1}'
+jeq "skill_loads counts the runs that loaded each skill" "$bench" '.skill_loads.pack' \
+  '{"rename-widget":{"demo-skill":1},"fix-readme-typo":{},"change-greeting":{}}'
+jeq "the none arm loads nothing" "$bench" '[.skill_loads.none[] | length] | add' 0
+contains "a quiet pack is named" "$TL_TMP/evaluate.err" "pack arm loaded no other skill"
+"$TL_EVALS/bin/report" "$ws" > /dev/null 2> "$TL_TMP/report.err"
+check "report refuses a composite record" test $? -ne 0
+contains "the refusal says why" "$TL_TMP/report.err" "not a promotion record"
+mkdir -p "$prepo/skills/engineering/aa-helper"
+printf -- '---\nname: aa-helper\ndescription: "Use when renaming any widget."\n---\n\nRename widgets by hand.\n' \
+  > "$prepo/skills/engineering/aa-helper/SKILL.md"
+( cd "$prepo" && tl_git add -A && tl_git commit -qm "promote aa-helper" ) || not_ok "commit aa-helper"
+evaluate --runs 1 --arms pack
+eq "a pack-only run exits 0" 0 "$rc"
+jeq "a competing skill takes the case" "$bench" '[.run_summary.pack.pass_rate, .skill_loads.pack["rename-widget"]]' '[0,{"aa-helper":1}]'
+contains "cross-triggering is named" "$TL_TMP/evaluate.err" "pack arm loaded other skills: aa-helper"
+ws_pack="$ws"
+: > "$FAKE_LAUNCH_LOG"
+"$EV" --resume "$ws_pack" > /dev/null 2> "$TL_TMP/resume.err"
+eq "a complete composite resumes with nothing to run" 0 "$(tl_launches)"
+printf '\nA new line.\n' >> "$prepo/skills/engineering/zz-helper/SKILL.md"
+( cd "$prepo" && tl_git commit -qam "edit zz-helper" ) || not_ok "commit zz-helper edit"
+rm -rf "$ws_pack/runs/rename-widget"
+"$EV" --resume "$ws_pack" > /dev/null 2> "$TL_TMP/resume.err"
+check "resume refuses a changed pack skill" test $? -ne 0
+contains "the refusal names the changed skill" "$TL_TMP/resume.err" "zz-helper skill tree changed"
+tl_use_fake "$repo"
+
 # --- edit mode: full vs the skill at --base ----------------------------------
 erepo="$(tl_make_repo edit-repo)" || tl_done
 tl_use_fake "$erepo"

@@ -1,0 +1,99 @@
+{
+  "evals": [
+    {
+      "id": "migration-check-skill",
+      "kind": "trap",
+      "fixture": "storefront",
+      "prompt": "Migrations keep breaking our deploys; `docs/incidents.md` has the postmortems. Write a project skill under `.agents/skills/` that agents working in this repo load when they add or change a migration, so these problems stop recurring. Give it a check script at `scripts/check.sh` inside the skill directory. CI will run it from the repo root with no arguments; it must check every migration in the repo and exit non-zero when it finds one of these problems.",
+      "assertions": [
+        {
+          "type": "script",
+          "path": "verify_migration_check.py",
+          "description": "the trap: the skill is valid and its check passes clean trees and fails each incident's problem planted again under new names"
+        }
+      ]
+    },
+    {
+      "id": "trim-deploying-skill",
+      "kind": "trap",
+      "fixture": "shop",
+      "prompt": "Agents skim `.agents/skills/deploying/SKILL.md` and miss steps; it's over 300 lines. Cut SKILL.md to under 120 lines without losing anything an agent needs while deploying.",
+      "assertions": [
+        {
+          "type": "script",
+          "path": "verify_trimmed_skill.py",
+          "description": "the trap: under 120 lines with every guard still in SKILL.md, including the ones buried in prose"
+        }
+      ]
+    },
+    {
+      "id": "fix-unloaded-skill",
+      "kind": "trap",
+      "fixture": "ledger",
+      "prompt": "Our `db-migrations` skill in `.agents/skills/` never gets used, even when an agent is adding a migration. Find out why and fix it.",
+      "assertions": [
+        {
+          "type": "script",
+          "path": "verify_skill_loads.py",
+          "description": "the trap: both loading defects fixed (invalid YAML on a continuation line, name not matching the directory)"
+        }
+      ]
+    },
+    {
+      "id": "player-skill-dedupe",
+      "kind": "non_trigger",
+      "fixture": "quest",
+      "prompt": "In `game/player.py`, `learn_skill` lets a player learn a skill they already know and charges them again. Make learning a known skill a no-op that costs nothing.",
+      "allowed_files": [
+        "game/player.py",
+        "tests/*"
+      ],
+      "assertions": [
+        {
+          "type": "script",
+          "source": "import sys\nsys.path.insert(0, sys.argv[1])\nfrom game.player import Player\np = Player('ayla')\np.learn_skill('heal')\np.learn_skill('heal')\nsys.exit(0 if (p.skill_points, p.skills.count('heal')) == (3, 1) else 1)"
+        },
+        {
+          "type": "command-succeeds",
+          "command": "python3 -m unittest discover -s tests -t ."
+        }
+      ]
+    },
+    {
+      "id": "deploying-typo",
+      "kind": "small_fix",
+      "fixture": "shop",
+      "prompt": "Fix the typo \"prodution\" in `.agents/skills/deploying/SKILL.md`.",
+      "assertions": [
+        {
+          "type": "script",
+          "source": "import sys, pathlib\nt = pathlib.Path(sys.argv[1], '.agents/skills/deploying/SKILL.md').read_text()\nsys.exit(0 if 'prodution' not in t and 'may be deployed to production.' in t and t.count('\\n') == 327 else 1)"
+        },
+        {
+          "type": "git-count",
+          "count": "changed_files",
+          "max": 1
+        }
+      ]
+    },
+    {
+      "id": "runbook-to-skill",
+      "kind": "trap",
+      "fixture": "catalog",
+      "prompt": "We do the LAMPLIGHT reindex by hand every few weeks from `docs/runbooks/lamplight.md`, and it's always whoever remembers how. Turn it into a project skill under `.agents/skills/` so that next time an agent here can handle it without one of us walking it through.",
+      "assertions": [
+        {
+          "type": "script",
+          "path": "verify_runbook_skill.py",
+          "description": "one valid project skill that keeps the runbook's guards"
+        },
+        {
+          "type": "skill-triggering",
+          "path": ".agents/skills/*",
+          "queries": "catalog-queries.json",
+          "description": "the written skill loads for LAMPLIGHT situations described by symptom and stays quiet on near misses"
+        }
+      ]
+    }
+  ]
+}

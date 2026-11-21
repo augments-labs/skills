@@ -1,0 +1,5 @@
+.search-box { position: absolute; top: 12px; left: 140px; width: 420px; }
+.site-logo { position: absolute; top: 8px; left: 16px; width: 160px; }
+@media (max-width: 600px) {
+  .search-box { width: 70%; }
+}

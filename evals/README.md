@@ -26,7 +26,8 @@ A skill resolves from `skills/<pack>/<name>/` or, if not found there, from `skil
 
 ```
 evals/bin/evaluate --pack PACK --skill NAME [--harness claude-code|codex|antigravity]
-    [--arms full,distilled,none | --arms full,old_skill,none --base COMMIT] [--runs 3]
+    [--arms full,distilled,none | --arms full,old_skill,none --base COMMIT
+     | --arms [full,]pack[,none]] [--runs 3]
     [--jobs 1] [--eval IDS] [--model NAME] [--shipped-arm full|distilled]
     [--timeout 900] [--out DIR] [--keep-workdirs] [--allow-unverified] [--dry-run]
 evals/bin/evaluate --resume DIR [--jobs 1] [--timeout 900] [--keep-workdirs]
@@ -36,6 +37,7 @@ evals/bin/triggering --pack PACK --skill NAME [--harness ...] [--runs 3]
     [--splits train,validation,holdout,negative] [--threshold 0.5] [--jobs 3]
     [--timeout 120] [--max-turns 6] [--description-file F] [--model NAME]
     [--out DIR] [--json] [--allow-unverified] [--dry-run]
+evals/bin/triggering --pack PACK --skill-dir DIR --queries FILE [options as above]
     exit: 0 all pass · 1 a query failed or was inconclusive · 2 bad args/unrunnable · 3 CLI missing
 
 evals/bin/optimize-description --pack PACK --skill NAME [--harness ...] [--runs 3]
@@ -55,8 +57,11 @@ evals/bin/report --scoreboard [--check]
 | `distilled` | `evals/<pack>/<skill>/distilled/` |
 | `none` | nothing installed |
 | `old_skill` | the skill at `--base`, extracted with `git archive` |
+| `pack` | the skill beside every promoted skill in `skills/<pack>/` |
 
 A bundle holds `SKILL.md` and the skill's `scripts/`, `references/`, and `assets/` directories, and nothing else. Hooks are off in every arm, and records carry `hooks_enabled: false`. `--arms full,distilled,none` runs in promotion mode. An `--arms` list with `old_skill` runs in edit mode; keep `none` in it, because the eval-record gate checks the controls against `none`.
+
+An `--arms` list with `pack` runs in composite mode, a check rather than a record. It shows whether a skill still passes its cases, and whether the controls stay quiet, when the whole pack competes for the same session. Run it for every promoted skill once the pack holds more than one, and before a release. `pack` combines only with `full` and `none`. The record adds `skill_loads`: for each arm and case, how many runs loaded each skill. A load on a `non_trigger` case, or a load of a skill other than the one under test, is cross-triggering to read before you ship. `evals/bin/report` refuses a composite record.
 
 ## Cases (`evals.json`)
 
@@ -84,21 +89,26 @@ A bundle holds `SKILL.md` and the skill's `scripts/`, `references/`, and `assets
 - **Kinds.** A `trap` case needs at least one assertion. A `non_trigger` case may list `allowed_files` (globs). Any other changed file is counted as `unrequested_files`. A `small_fix` case is a routine task the skill must not slow down.
 - **Assertions** are deterministic. Each path must stay inside the work tree, symlinks included. Patterns are Python regexes in multiline mode, and an assertion may set `"ignore_case": true`. A `git-count` counts `commits` or `changed_files` since the seed commit.
 - **`script`** gets either python3 `source` or a `path` relative to the case dir. It receives the work dir as `argv[1]`. Exit 0 passes, exit 1 fails, and any other code is `needs_review`. Verifiers and commands run with a scrubbed env (`PATH`, a scratch `HOME`, `EVAL_WORKDIR`, `EVAL_CHANGED_FILES`, `EVAL_SEED=seed`). A timeout is `needs_review`.
+- **`skill-triggering`** scores a skill the run wrote: `{"type": "skill-triggering", "path": ".agents/skills/*", "queries": "written-queries.json", "runs": 3, "threshold": 0.5}`. `path` is a glob in the work tree and `queries` a queries file in the case dir (its fixtures resolve under `files/` next to it); `runs` and `threshold` are optional. After the session, `evaluate` finds the one skill the run wrote under `path` and runs `evals/bin/triggering --skill-dir` on it, with the run's harness and model, into `<run>/triggering-<i>/`. It passes when every query passes. No skill, more than one, or a skill whose `name` is invalid or differs from its directory fails. An inconclusive query or a harness error is `needs_review`, and a refusal that leaves a query unscored makes the run indeterminate (`refusal`), so `--resume` reruns it. Each such case adds up to `queries x runs` short sessions per run; `--dry-run` counts them.
 - **Follow-ups.** An optional `"followups": ["Now update registry.txt to match.", "Thanks, that is all."]` (a non-empty list of non-empty strings) sends more messages after `prompt`, in order, into the same session, with the same home, work tree, and tools. The case is graded once, on the final work tree. The whole session shares one `--timeout`, and a follow-up that fails ends the session. A run keeps the first prompt in `prompt.txt` and the rest in `followups.json`. `stream.ndjson` holds every turn's events, appended in order. Metrics are summed over the turns, and `response.txt` is the final answer. On an adapter that cannot send follow-ups, the case runs no session at all and every run is indeterminate (`followups_unsupported`), so it is never graded on its first turn alone.
 - **Indeterminate runs.** A run is indeterminate if it hits any of these: a timeout, a nonzero exit, a refusal or usage limit, no model turn, a skill loaded in `none`, a setup failure, or follow-ups the adapter cannot send. Indeterminate runs are counted apart and never scored.
 
 ## `benchmark.json`
 
 ```
-{schema_version: 1, pack, skill, mode: "promotion"|"edit", shipped_arm: "full"|"distilled",
+{schema_version: 1, pack, skill, mode: "promotion"|"edit"|"composite",
+ shipped_arm: "full"|"distilled" ("pack" in composite mode),
  measured_at, harness, harness_version, model, runs_per_eval, hooks_enabled: false,
- arms: {full: {commit, skill_tree}, distilled?: {...}, old_skill?: {...}, none?: null},
+ arms: {full: {commit, skill_tree}, distilled?: {...}, old_skill?: {...}, none?: null,
+   pack?: {commit, skill_tree, pack_skills: {<skill>: <tree>}}},
  run_summary: {<arm>: {pass_rate, scored_runs, indeterminate_count, needs_review_count,
    mean_output_tokens, mean_time_seconds,
    control_non_trigger: {skill_loads, unrequested_files, median_tool_calls},
    control_small_fix: {pass_rate, median_output_tokens, median_tool_calls, median_turns}}},
  evals: [{id, kind, arms: {<arm>: {scored_runs, passed, indeterminate, needs_review}}}],
- deltas: {full_vs_none?, distilled_vs_none?, full_vs_distilled?, full_vs_old_skill?}}
+ deltas: {full_vs_none?, distilled_vs_none?, full_vs_distilled?, full_vs_old_skill?,
+   pack_vs_full?, pack_vs_none?},
+ skill_loads?: {<arm>: {<case id>: {<skill>: <runs that loaded it>}}}}
 ```
 
 - `pass_rate` covers trap cases only.
@@ -123,7 +133,7 @@ A bundle holds `SKILL.md` and the skill's `scripts/`, `references/`, and `assets
   {"query": "The billing tests fail since the refactor", "should_trigger": true, "split": "train", "fixture": "billing"}]}
 ```
 
-A query's `fixture` overrides the file-level one. Seed each query with the files it names: a request about files the work tree lacks leaves the model nothing to do but load the skill, which overstates the trigger rate.
+A query's `fixture` overrides the file-level one. `--queries FILE` scores another queries file; its fixtures resolve under `files/` next to it. `--skill-dir DIR` scores the skill in `DIR`, named by its `SKILL.md` `name`, instead of `--skill`. Like a candidate description, it records a `null` `skill_tree` and cannot be recorded. Seed each query with the files it names: a request about files the work tree lacks leaves the model nothing to do but load the skill, which overstates the trigger rate.
 
 ```
 {schema_version: 1, pack, skill, manual_only, harness, harness_version, model,

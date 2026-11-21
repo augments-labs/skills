@@ -58,7 +58,7 @@ Skills live under `skills/<pack>/` and ship as self-contained plugin bundles und
 
 | Pack | Plugin address | Status | Focus |
 | --- | --- | --- | --- |
-| **Engineering** (`skills/engineering/`) | `engineering-skills@augments-labs` | Pre-1.0 (`0.1.0`) | Eval-backed engineering constraints, verification, debugging, production-safety, and project-local checks |
+| **Engineering** (`skills/engineering/`) | `engineering-skills@augments-labs` | Pre-1.0 (`0.1.1`) | Eval-backed engineering constraints, verification, debugging, production-safety, and project-local checks |
 | **Staging** (`skills/in-progress/`) | *(not bundled)* | Experimental | Candidate skills undergoing 3-arm and triggering evaluation before promotion |
 | **Retired** (`skills/deprecated/`) | *(not bundled)* | Archived | Skills retired once frontier models close the gap |
 
@@ -71,23 +71,28 @@ Every promoted skill body under `skills/engineering/` is capped at 200 lines, 2,
 <!-- token-budget-table:start -->
 | Surface (`engineering-skills`) | Skills | Words | Approx tokens |
 | --- | --- | --- | --- |
-| Auto-triggered descriptions (1201 chars) | 2 | n/a | 301 |
+| Auto-triggered descriptions (1801 chars) | 3 | n/a | 451 |
 | User-invoked descriptions (0 chars) | 0 | n/a | 0 |
-| Promoted skill bodies (if all loaded) | 2 | 2111 | 3049 |
+| Promoted skill bodies (if all loaded) | 3 | 3020 | 4375 |
 <!-- token-budget-table:end -->
 
 <!-- eval-scoreboard:start -->
 | Skill | Arm shipped | Pass rate (`shipped` vs `none`) | Control delta (non-trigger / small fix) | Token delta | Model & date | Record |
 | --- | --- | --- | --- | --- | --- | --- |
+| `engineering/debugging` | `full` | 100% vs 59% | +0.5 calls / +0 calls, +0 turns | +254.0 output (small fix) | claude-haiku-5-5, 2026-11-21 | [2026-11-21-engineering-debugging-claude-code-claude-haiku-5-5](evals/results/2026-11-21-engineering-debugging-claude-code-claude-haiku-5-5/benchmark.json) |
+| `engineering/debugging` | `full` | 93% vs 100% | +0 calls / -1.5 calls, -1.5 turns | -488.0 output (small fix) | claude-opus-5-5, 2026-11-21 | [2026-11-21-engineering-debugging-claude-code-claude-opus-5-5](evals/results/2026-11-21-engineering-debugging-claude-code-claude-opus-5-5/benchmark.json) |
 | `engineering/debugging` | `full` | 100% vs 85% | +0.0 calls / +0.0 calls, +0.0 turns | -16 output (small fix) | claude-sonnet-5-5, 2026-11-21 | [2026-11-21-engineering-debugging-claude-code](evals/results/2026-11-21-engineering-debugging-claude-code/benchmark.json) |
 | `engineering/test-driven-development` | `full` | 100% vs 57% | +0 calls / +0 calls, +0 turns | +170 output (small fix) | claude-haiku-5-5, 2026-11-21 | [2026-11-21-engineering-test-driven-development-claude-code-claude-haiku-5-5](evals/results/2026-11-21-engineering-test-driven-development-claude-code-claude-haiku-5-5/benchmark.json) |
 | `engineering/test-driven-development` | `full` | 100% vs 81% | -0.5 calls / +0 calls, +0 turns | -137 output (small fix) | claude-opus-5-5, 2026-11-21 | [2026-11-21-engineering-test-driven-development-claude-code-claude-opus-5-5](evals/results/2026-11-21-engineering-test-driven-development-claude-code-claude-opus-5-5/benchmark.json) |
 | `engineering/test-driven-development` | `full` | 100% vs 38% | +0.0 calls / -1.5 calls, -1.5 turns | -168.5 output (small fix) | claude-sonnet-5-5, 2026-11-21 | [2026-11-21-engineering-test-driven-development-claude-code-claude-sonnet-5-5](evals/results/2026-11-21-engineering-test-driven-development-claude-code-claude-sonnet-5-5/benchmark.json) |
+| `engineering/writing-skills` | `full` | 100% vs 75% | +0 calls / -1 calls, -1 turns | -120 output (small fix) | claude-haiku-5-5, 2026-11-21 | [2026-11-21-engineering-writing-skills-claude-code-claude-haiku-5-5](evals/results/2026-11-21-engineering-writing-skills-claude-code-claude-haiku-5-5/benchmark.json) |
+| `engineering/writing-skills` | `full` | 100% vs 92% | +0 calls / +0 calls, +0 turns | +108 output (small fix) | claude-opus-5-5, 2026-11-21 | [2026-11-21-engineering-writing-skills-claude-code-claude-opus-5-5](evals/results/2026-11-21-engineering-writing-skills-claude-code-claude-opus-5-5/benchmark.json) |
+| `engineering/writing-skills` | `full` | 100% vs 100% | +0 calls / +0 calls, +0 turns | -51 output (small fix) | claude-sonnet-5-5, 2026-11-21 | [2026-11-21-engineering-writing-skills-claude-code-claude-sonnet-5-5](evals/results/2026-11-21-engineering-writing-skills-claude-code-claude-sonnet-5-5/benchmark.json) |
 <!-- eval-scoreboard:end -->
 
 ## Installation
 
-> **Pre-1.0 notice (`0.1.0`):** The `engineering-skills` plugin ships two evaluated skills (`debugging`, `test-driven-development`) and two hooks (`guard-destructive-git`, `guard-protected-branch`). More skills ship as they pass evaluation, and pre-1.0 releases may change the pack's surface.
+> **Pre-1.0 notice (`0.1.1`):** The `engineering-skills` plugin ships three evaluated skills (`debugging`, `test-driven-development`, `writing-skills`) and two hooks (`guard-destructive-git`, `guard-protected-branch`). More skills ship as they pass evaluation, and pre-1.0 releases may change the pack's surface.
 
 ### Claude Code
 
