@@ -81,16 +81,14 @@ def load(path):
     with open(path) as f:
         return json.load(f)
 m = {d: load(f"{root}/{d}/plugin.json") for d in (".claude-plugin", ".codex-plugin", ".antigravity-plugin",
-     ".cursor-plugin", ".devin-plugin", ".grok-plugin", ".kimi-plugin", ".muse-plugin")}
+     ".grok-plugin", ".kimi-plugin", ".muse-plugin")}
 for d, j in m.items():
     assert j["name"] == "engineering-skills" and "email" not in json.dumps(j), d
 c = m[".codex-plugin"]
 assert c["skills"] == "./skills/" and c["hooks"] == "./hooks/codex-hooks.json", c
-# Cursor and Grok Build would otherwise load hooks/hooks.json; Kimi Code and Devin get no hooks entry.
-assert m[".cursor-plugin"]["skills"] == "./skills/" and m[".cursor-plugin"]["hooks"] == {}, m[".cursor-plugin"]
+# Grok Build would otherwise load hooks/hooks.json; Kimi Code gets no hooks entry.
 assert m[".grok-plugin"]["skills"] == "./skills/" and m[".grok-plugin"]["hooks"] == [], m[".grok-plugin"]
 assert m[".kimi-plugin"]["skills"] == ["./skills/"] and "hooks" not in m[".kimi-plugin"], m[".kimi-plugin"]
-assert "hooks" not in m[".devin-plugin"], m[".devin-plugin"]
 mu = m[".muse-plugin"]
 assert mu["compat"] == {"source": "native", "manifestDir": ".muse-plugin"}, mu
 names = sorted(os.listdir(root + "/skills"))

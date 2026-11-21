@@ -102,8 +102,7 @@ if [ -d plugins ]; then
 fi
 
 # 4b. Some harnesses load a plugin's agent-instruction and rule files as
-# always-on rules (Devin reads AGENTS.md, rules/, and .windsurfrules at the
-# plugin root). A bundle ships skills and hooks only.
+# always-on rules. A bundle ships skills and hooks only.
 if [ -d plugins ]; then
   while IFS= read -r rf; do
     fail "$rf: plugin bundles must not ship instruction or rule files"

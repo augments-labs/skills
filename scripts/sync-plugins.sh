@@ -27,8 +27,6 @@ Rebuilds plugins/<pack>-skills/ for every pack under skills/ or hooks/
   .claude-plugin/plugin.json        manifests, version stamped from package.json
   .codex-plugin/plugin.json
   .antigravity-plugin/plugin.json
-  .cursor-plugin/plugin.json        skills only; "hooks": {} keeps hooks/hooks.json out
-  .devin-plugin/plugin.json         skills; the hooks stay inert under Devin
   .grok-plugin/plugin.json          skills only; "hooks": [] keeps hook files out
   .kimi-plugin/plugin.json          skills only
   .muse-plugin/plugin.json          skills only, each skill listed
@@ -195,20 +193,10 @@ $common$codex_paths,
 }
 EOF
 
-  # Cursor falls back to hooks/hooks.json when its manifest names no hooks;
-  # an empty object keeps the Claude Code hooks out of Cursor.
+  # Grok Build loads hook files unless the manifest lists none.
   local skills_path=""
   [ "${#skill_names[@]}" -gt 0 ] && skills_path=",
   \"skills\": \"./skills/\""
-  mkdir -p "$dest/.cursor-plugin"
-  printf '{\n%s%s,\n  "hooks": {}\n}\n' "$common" "$skills_path" > "$dest/.cursor-plugin/plugin.json"
-
-  # Devin reads skills/ and also loads hooks/hooks.json and hooks.json, which
-  # its manifest cannot turn off; the hook adapter stays inert under Devin.
-  mkdir -p "$dest/.devin-plugin"
-  printf '{\n%s\n}\n' "$common" > "$dest/.devin-plugin/plugin.json"
-
-  # Grok Build loads hook files unless the manifest lists none.
   mkdir -p "$dest/.grok-plugin"
   printf '{\n%s%s,\n  "hooks": []\n}\n' "$common" "$skills_path" > "$dest/.grok-plugin/plugin.json"
 
