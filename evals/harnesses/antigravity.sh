@@ -71,6 +71,11 @@ adapter_run_activation() { # $1 work dir $2 prompt $3 stream
   _agy_exec "$1" --mode plan --print="$2" > "$3" 2>> "${errlog:-/dev/null}"
 }
 
+# Continuing a print-mode session is not verified for this CLI, so a case
+# with follow-ups runs no session and is recorded as indeterminate
+# (followups_unsupported) rather than graded on its first turn.
+adapter_supports_followups() { false; }
+
 # A skill counts as loaded when a step names it, or a file-read tool reads a
 # SKILL.md (its parent directory is the skill name). Handles both agy 1.5+
 # (step_type="tool", tool_info.parameters.Path) and legacy step_type="tool_call".

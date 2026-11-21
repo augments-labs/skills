@@ -58,7 +58,7 @@ Skills live under `skills/<pack>/` and ship as self-contained plugin bundles und
 
 | Pack | Plugin address | Status | Focus |
 | --- | --- | --- | --- |
-| **Engineering** (`skills/engineering/`) | `engineering-skills@augments-labs` | Pre-1.0 (`0.0.1`) | Eval-backed engineering constraints, verification, debugging, production-safety, and project-local checks |
+| **Engineering** (`skills/engineering/`) | `engineering-skills@augments-labs` | Pre-1.0 (`0.1.0`) | Eval-backed engineering constraints, verification, debugging, production-safety, and project-local checks |
 | **Staging** (`skills/in-progress/`) | *(not bundled)* | Experimental | Candidate skills undergoing 3-arm and triggering evaluation before promotion |
 | **Retired** (`skills/deprecated/`) | *(not bundled)* | Archived | Skills retired once frontier models close the gap |
 
@@ -71,20 +71,23 @@ Every promoted skill body under `skills/engineering/` is capped at 200 lines, 2,
 <!-- token-budget-table:start -->
 | Surface (`engineering-skills`) | Skills | Words | Approx tokens |
 | --- | --- | --- | --- |
-| Auto-triggered descriptions (657 chars) | 1 | n/a | 165 |
+| Auto-triggered descriptions (1201 chars) | 2 | n/a | 301 |
 | User-invoked descriptions (0 chars) | 0 | n/a | 0 |
-| Promoted skill bodies (if all loaded) | 1 | 1132 | 1648 |
+| Promoted skill bodies (if all loaded) | 2 | 2111 | 3049 |
 <!-- token-budget-table:end -->
 
 <!-- eval-scoreboard:start -->
 | Skill | Arm shipped | Pass rate (`shipped` vs `none`) | Control delta (non-trigger / small fix) | Token delta | Model & date | Record |
 | --- | --- | --- | --- | --- | --- | --- |
 | `engineering/debugging` | `full` | 100% vs 85% | +0.0 calls / +0.0 calls, +0.0 turns | -16 output (small fix) | claude-sonnet-5-5, 2026-11-21 | [2026-11-21-engineering-debugging-claude-code](evals/results/2026-11-21-engineering-debugging-claude-code/benchmark.json) |
+| `engineering/test-driven-development` | `full` | 100% vs 57% | +0 calls / +0 calls, +0 turns | +170 output (small fix) | claude-haiku-5-5, 2026-11-21 | [2026-11-21-engineering-test-driven-development-claude-code-claude-haiku-5-5](evals/results/2026-11-21-engineering-test-driven-development-claude-code-claude-haiku-5-5/benchmark.json) |
+| `engineering/test-driven-development` | `full` | 100% vs 81% | -0.5 calls / +0 calls, +0 turns | -137 output (small fix) | claude-opus-5-5, 2026-11-21 | [2026-11-21-engineering-test-driven-development-claude-code-claude-opus-5-5](evals/results/2026-11-21-engineering-test-driven-development-claude-code-claude-opus-5-5/benchmark.json) |
+| `engineering/test-driven-development` | `full` | 100% vs 38% | +0.0 calls / -1.5 calls, -1.5 turns | -168.5 output (small fix) | claude-sonnet-5-5, 2026-11-21 | [2026-11-21-engineering-test-driven-development-claude-code-claude-sonnet-5-5](evals/results/2026-11-21-engineering-test-driven-development-claude-code-claude-sonnet-5-5/benchmark.json) |
 <!-- eval-scoreboard:end -->
 
 ## Installation
 
-> **Pre-1.0 notice (`0.0.1`):** The `engineering-skills` plugin ships one evaluated skill (`debugging`) and two hooks (`guard-destructive-git`, `guard-protected-branch`). More skills ship as they pass evaluation, and pre-1.0 releases may change the pack's surface.
+> **Pre-1.0 notice (`0.1.0`):** The `engineering-skills` plugin ships two evaluated skills (`debugging`, `test-driven-development`) and two hooks (`guard-destructive-git`, `guard-protected-branch`). More skills ship as they pass evaluation, and pre-1.0 releases may change the pack's surface.
 
 ### Claude Code
 
@@ -107,17 +110,64 @@ codex plugin add engineering-skills@augments-labs
 agy plugin install https://github.com/augments-labs/skills/tree/main/plugins/engineering-skills
 ```
 
+### pi
+
+```bash
+pi install git:github.com/augments-labs/skills
+```
+
+### Grok Build
+
+```bash
+grok plugin marketplace add augments-labs/skills
+grok plugin install engineering-skills
+```
+
+Grok asks you to trust the plugin before it enables it.
+
+### Muse Code
+
+```bash
+muse plugins marketplace add augments-labs https://github.com/augments-labs/skills.git
+muse plugins install engineering-skills@augments-labs
+```
+
+### Hermes
+
+```bash
+hermes plugins install augments-labs/skills/plugins/engineering-skills --enable
+```
+
+Hermes scans the plugin before installing it and rates it `caution`, because the bundled hook scripts name `sudo` so they can recognize it in commands. Hermes never runs those scripts. Confirm at the prompt to install.
+
+### Kimi Code
+
+Inside Kimi Code, install the repository archive or the path of a local clone:
+
+```text
+/plugins install https://github.com/augments-labs/skills/archive/refs/heads/main.zip
+```
+
+### OpenCode 2.x
+
+```bash
+opencode plugin add git+https://github.com/augments-labs/skills.git
+```
+
 ### Skill-only install (`npx skills`)
 
 ```bash
 npx skills add augments-labs/skills/plugins/engineering-skills
 ```
 
-> Note: `npx skills add` installs `SKILL.md` files only, without deterministic hooks. For hook enforcement, install through your harness's plugin mechanism above. [`docs/hooks.md`](docs/hooks.md) lists what the hooks block and how to turn them off.
+### Which installs run hooks
 
-### Other harnesses
+The hooks run in Claude Code, Codex CLI, and Antigravity. Every other install above gives you the skills only:
 
-Native plugin bundles for Cursor, Devin, OpenCode, pi, Kimi Code, Hermes, Grok Build, and Muse Code are planned for the next release. Until then, use the skill-only install above on harnesses that read Agent Skills.
+- The Grok Build, Kimi Code, and Muse Code manifests declare no hooks, so those harnesses never load the bundled hook files.
+- pi, Hermes, OpenCode, and `npx skills add` read skills only.
+
+[`docs/hooks.md`](docs/hooks.md) lists what the hooks block and how to turn them off.
 
 ## Documentation
 

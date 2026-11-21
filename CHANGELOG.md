@@ -6,6 +6,15 @@ All notable changes to `augments-labs/skills` are documented here. Entries follo
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-21
+
+- `engineering-skills` now installs on OpenCode 2.x, pi, Grok Build, Hermes,
+  Kimi Code, and Muse Code, with the skills only. The hooks still run in Claude
+  Code, Codex CLI, and Antigravity, and stay out of the other harnesses.
+- `test-driven-development` skill in the engineering pack: writes tests before
+  the code, pins the current behavior before a refactor, and plants likely
+  mistakes to confirm the tests catch each one.
+
 ## [0.0.1] - 2026-11-21
 
 - First release of the `engineering-skills` plugin for Claude Code, Codex CLI,

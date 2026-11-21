@@ -15,7 +15,7 @@ evals/
     files/<fixture>/    fixture trees the cases start from
     queries.json        triggering queries
     distilled/SKILL.md  the distilled arm (optional)
-  results/<date>-<pack>-<skill>-<harness>[-triggering]/
+  results/<date>-<pack>-<skill>-<harness>[-<model>][-triggering]/
     benchmark.json | triggering.json      (committed records, nothing else)
   workspaces/   raw runs (gitignored; never commit)
 ```
@@ -45,7 +45,7 @@ evals/bin/report WORKSPACE|RECORD.json [--date YYYY-MM-DD]
 evals/bin/report --scoreboard [--check]
 ```
 
-`EVALS_COST_PER_SESSION` (a number) prices the plan of a `--dry-run`. `report` copies only the record into `evals/results/`. It refuses to overwrite an existing target, to record a `skill_tree` of `null` (an uncommitted skill or a candidate description), and to record a run with hooks enabled. Recording a benchmark rewrites the README table between `<!-- eval-scoreboard:start -->` and `<!-- eval-scoreboard:end -->`. `--check` exits 1 if that table has drifted from the records.
+`EVALS_COST_PER_SESSION` (a number) prices the plan of a `--dry-run`. `report` copies only the record into `evals/results/`. It refuses to overwrite an existing target, to record a `skill_tree` of `null` (an uncommitted skill or a candidate description), and to record a run with hooks enabled. The record's directory name ends with its model ID, lowercased with other characters turned into dashes, so records for several models can share a date. Recording a benchmark rewrites the README table between `<!-- eval-scoreboard:start -->` and `<!-- eval-scoreboard:end -->`. The table shows the latest record for each skill and model. `--check` exits 1 if that table has drifted from the records.
 
 ## Arms
 
@@ -84,7 +84,8 @@ A bundle holds `SKILL.md` and the skill's `scripts/`, `references/`, and `assets
 - **Kinds.** A `trap` case needs at least one assertion. A `non_trigger` case may list `allowed_files` (globs). Any other changed file is counted as `unrequested_files`. A `small_fix` case is a routine task the skill must not slow down.
 - **Assertions** are deterministic. Each path must stay inside the work tree, symlinks included. Patterns are Python regexes in multiline mode, and an assertion may set `"ignore_case": true`. A `git-count` counts `commits` or `changed_files` since the seed commit.
 - **`script`** gets either python3 `source` or a `path` relative to the case dir. It receives the work dir as `argv[1]`. Exit 0 passes, exit 1 fails, and any other code is `needs_review`. Verifiers and commands run with a scrubbed env (`PATH`, a scratch `HOME`, `EVAL_WORKDIR`, `EVAL_CHANGED_FILES`, `EVAL_SEED=seed`). A timeout is `needs_review`.
-- **Indeterminate runs.** A run is indeterminate if it hits any of these: a timeout, a nonzero exit, a refusal or usage limit, no model turn, a skill loaded in `none`, or a setup failure. Indeterminate runs are counted apart and never scored.
+- **Follow-ups.** An optional `"followups": ["Now update registry.txt to match.", "Thanks, that is all."]` (a non-empty list of non-empty strings) sends more messages after `prompt`, in order, into the same session, with the same home, work tree, and tools. The case is graded once, on the final work tree. The whole session shares one `--timeout`, and a follow-up that fails ends the session. A run keeps the first prompt in `prompt.txt` and the rest in `followups.json`. `stream.ndjson` holds every turn's events, appended in order. Metrics are summed over the turns, and `response.txt` is the final answer. On an adapter that cannot send follow-ups, the case runs no session at all and every run is indeterminate (`followups_unsupported`), so it is never graded on its first turn alone.
+- **Indeterminate runs.** A run is indeterminate if it hits any of these: a timeout, a nonzero exit, a refusal or usage limit, no model turn, a skill loaded in `none`, a setup failure, or follow-ups the adapter cannot send. Indeterminate runs are counted apart and never scored.
 
 ## `benchmark.json`
 
@@ -146,12 +147,14 @@ The following environment variables override paths: `EVALS_REPO_ROOT`, `EVALS_HA
 
 ## Adapters
 
-An adapter is a sourced shell file. It sets `adapter_name`, `runnable=yes|no`, and `runnable_reason`, and defines these functions: `adapter_check`, `adapter_version`, `adapter_install BUNDLE`, `adapter_run_behavioral WD PROMPT_FILE STREAM`, `adapter_run_activation WD QUERY STREAM`, `adapter_chain`, `adapter_ran`, `adapter_output_tokens`, `adapter_tool_calls`, `adapter_turns`, and `adapter_session_model` (each of the last six takes a STREAM). The runners set the globals `timeout_s`, `errlog`, `maxturns`, and `model`.
+An adapter is a sourced shell file. It sets `adapter_name`, `runnable=yes|no`, and `runnable_reason`, and defines these functions: `adapter_check`, `adapter_version`, `adapter_install BUNDLE`, `adapter_run_behavioral WD PROMPT_FILE STREAM [FOLLOWUPS_FILE]`, `adapter_run_activation WD QUERY STREAM`, `adapter_supports_followups`, `adapter_chain`, `adapter_ran`, `adapter_output_tokens`, `adapter_tool_calls`, `adapter_turns`, and `adapter_session_model` (each of the last six takes a STREAM). The runners set the globals `timeout_s`, `errlog`, `maxturns`, and `model`.
+
+`adapter_run_behavioral` gets a `FOLLOWUPS_FILE` (a JSON array of strings) only for a case with follow-ups, and only when `adapter_supports_followups` succeeds. It then continues the session once per message and appends each call's events to `STREAM`; `lab_each_followup` in `lib/common.sh` runs that loop within the session's timeout. The stream parsers must total over every call in the stream, and the answer text comes from the last one.
 
 | Harness | runnable | Status |
 |---|---|---|
-| `claude-code` | yes | stream-json parser and install verified against recorded fixtures |
-| `codex` | no | parser and install covered offline; not yet validated against a live CLI |
-| `antigravity` | yes | plugin install and stream-json parser verified against live `agy` CLI (pass `--model` from `agy models` to pin and record the model ID) |
+| `claude-code` | yes | stream-json parser and install verified against recorded fixtures; follow-ups continue the session with `--continue` |
+| `codex` | no | parser and install covered offline; not yet validated against a live CLI; follow-ups use `exec resume --last`, also offline only |
+| `antigravity` | yes | plugin install and stream-json parser verified against live `agy` CLI (pass `--model` from `agy models` to pin and record the model ID); follow-ups unsupported |
 
 `--allow-unverified` runs an adapter marked `runnable=no`. The offline suites use `lib/tests/fake-cli/fake.sh` and a scripted agent. Tripwire shims named `claude`, `codex`, and `agy` sit first on `PATH`, so a suite fails if it ever reaches a real CLI.

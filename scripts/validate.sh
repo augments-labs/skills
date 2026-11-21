@@ -49,7 +49,9 @@ check_json_file() {
   fi
 }
 
-for jf in package.json .claude-plugin/marketplace.json .agents/plugins/marketplace.json; do
+# Root manifests that sync-plugins.sh writes for the root pack.
+root_manifests=".kimi-plugin/plugin.json .grok-plugin/plugin.json .grok-plugin/marketplace.json"
+for jf in package.json .claude-plugin/marketplace.json .agents/plugins/marketplace.json $root_manifests; do
   [ -f "$jf" ] && check_json_file "$jf"
 done
 
@@ -72,13 +74,14 @@ fi
 # 4. Canonical version parity across package.json, marketplace.json, and any generated plugin manifests.
 pkg_ver=$(sed -n 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' package.json | head -n 1)
 [ -n "$pkg_ver" ] || fail "package.json: missing version"
-if [ -f .claude-plugin/marketplace.json ]; then
+for vf in .claude-plugin/marketplace.json $root_manifests; do
+  [ -f "$vf" ] || continue
   while IFS= read -r mv; do
     if [ -n "$mv" ] && [ "$mv" != "$pkg_ver" ]; then
-      fail ".claude-plugin/marketplace.json: version '$mv' disagrees with package.json '$pkg_ver'"
+      fail "$vf: version '$mv' disagrees with package.json '$pkg_ver'"
     fi
-  done < <(sed -n 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' .claude-plugin/marketplace.json)
-fi
+  done < <(sed -n 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$vf")
+done
 if [ -d plugins ]; then
   while IFS= read -r pm; do
     [ -f "$pm" ] || continue
@@ -96,6 +99,15 @@ if [ -d plugins ]; then
       fail "$pm: version '$mv' disagrees with package.json '$pkg_ver'"
     fi
   done < <(find plugins -maxdepth 3 \( -name 'plugin.json' -o -name 'plugin.yaml' -o -name 'package.json' \) -type f 2>/dev/null | sort)
+fi
+
+# 4b. Some harnesses load a plugin's agent-instruction and rule files as
+# always-on rules. A bundle ships skills and hooks only.
+if [ -d plugins ]; then
+  while IFS= read -r rf; do
+    fail "$rf: plugin bundles must not ship instruction or rule files"
+  done < <(find plugins -mindepth 2 -maxdepth 2 \( -iname 'AGENTS.md' -o -iname 'AGENT.md' -o -iname 'AGENTS.local.md' \
+    -o -iname 'CLAUDE.md' -o -iname 'GEMINI.md' -o -name '.windsurfrules' -o -name '.cursorrules' -o -name 'rules' \) 2>/dev/null | sort)
 fi
 
 # 5. Built-in harness slash commands that skills must never shadow.

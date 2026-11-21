@@ -6,8 +6,14 @@
 set -euo pipefail
 export LC_ALL=C
 
+# The pack that harnesses installing from the repository root load (pi from
+# package.json, OpenCode from index.js, Kimi Code from .kimi-plugin/, Grok
+# Build from .grok-plugin/). Every other pack installs from its own bundle
+# path, which carries every manifest, or from a marketplace entry.
+root_pack=engineering
+
 usage() {
-  cat <<'EOF'
+  cat <<EOF
 Usage: bash scripts/sync-plugins.sh [--check]
 
 Rebuilds plugins/<pack>-skills/ for every pack under skills/ or hooks/
@@ -21,6 +27,17 @@ Rebuilds plugins/<pack>-skills/ for every pack under skills/ or hooks/
   .claude-plugin/plugin.json        manifests, version stamped from package.json
   .codex-plugin/plugin.json
   .antigravity-plugin/plugin.json
+  .grok-plugin/plugin.json          skills only; "hooks": [] keeps hook files out
+  .kimi-plugin/plugin.json          skills only
+  .muse-plugin/plugin.json          skills only, each skill listed
+  plugin.yaml, __init__.py          Hermes Agent plugin  <- scripts/templates/hermes-init.py
+  index.js                          OpenCode plugin      <- scripts/templates/opencode-index.js
+
+The root pack ($root_pack) also installs from the repository root: this
+script writes .kimi-plugin/plugin.json and .grok-plugin/plugin.json there,
+copies .claude-plugin/marketplace.json to .grok-plugin/marketplace.json (Grok
+Build reads only that index once .grok-plugin/ exists), and checks that
+package.json ("pi" skills) and index.js (OpenCode) load the root pack's bundle.
 
   --check   build into a temporary directory and fail if plugins/ differs
   --help    this text
@@ -143,19 +160,7 @@ build_pack() { # $1 pack, $2 output root
   done < <(list_files "hooks/$pack")
 
   local common
-  common=$(cat <<EOF
-  "name": "$plugin",
-  "version": "$version",
-  "description": "$(json_escape "$description")",
-  "author": {
-    "name": "Augments Labs"
-  },
-  "homepage": "https://github.com/augments-labs/skills",
-  "repository": "https://github.com/augments-labs/skills",
-  "license": "MIT",
-  "keywords": $(json_array "${keywords[@]}")
-EOF
-)
+  common=$(manifest_common)
 
   # Claude Code discovers skills/ and hooks/hooks.json at the plugin root.
   mkdir -p "$dest/.claude-plugin"
@@ -187,6 +192,83 @@ $common$codex_paths,
   }
 }
 EOF
+
+  # Grok Build loads hook files unless the manifest lists none.
+  local skills_path=""
+  [ "${#skill_names[@]}" -gt 0 ] && skills_path=",
+  \"skills\": \"./skills/\""
+  mkdir -p "$dest/.grok-plugin"
+  printf '{\n%s%s,\n  "hooks": []\n}\n' "$common" "$skills_path" > "$dest/.grok-plugin/plugin.json"
+
+  # Kimi Code reads component paths from its manifest.
+  mkdir -p "$dest/.kimi-plugin"
+  kimi_manifest "./skills/" > "$dest/.kimi-plugin/plugin.json"
+
+  # Muse Code imports another family's manifest (and its hooks) unless its
+  # own manifest names its directory and lists each skill.
+  local muse_skills="" sep=""
+  for name in ${skill_names[@]+"${skill_names[@]}"}; do
+    muse_skills="$muse_skills$sep
+      { \"id\": \"$name\", \"path\": \"skills/$name/SKILL.md\" }"
+    sep=","
+  done
+  [ -n "$muse_skills" ] && muse_skills="$muse_skills
+    "
+  mkdir -p "$dest/.muse-plugin"
+  cat > "$dest/.muse-plugin/plugin.json" <<EOF
+{
+  "schemaVersion": 1,
+  "name": "$plugin",
+  "version": "$version",
+  "description": "$(json_escape "$description")",
+  "compat": {
+    "source": "native",
+    "manifestDir": ".muse-plugin"
+  },
+  "capabilities": {
+    "skills": [$muse_skills]
+  }
+}
+EOF
+
+  # Hermes Agent loads plugin.yaml and __init__.py from the plugin root.
+  cat > "$dest/plugin.yaml" <<EOF
+name: $plugin
+version: $version
+description: "$(json_escape "$description")"
+EOF
+  cp scripts/templates/hermes-init.py "$dest/__init__.py"
+
+  # OpenCode loads index.js from a plugin directory or package.
+  sed "s|@PLUGIN@|$plugin|g" scripts/templates/opencode-index.js > "$dest/index.js"
+}
+
+# manifest_common: the fields every JSON manifest of the current pack shares.
+manifest_common() {
+  cat <<EOF
+  "name": "$plugin",
+  "version": "$version",
+  "description": "$(json_escape "$description")",
+  "author": {
+    "name": "Augments Labs"
+  },
+  "homepage": "https://github.com/augments-labs/skills",
+  "repository": "https://github.com/augments-labs/skills",
+  "license": "MIT",
+  "keywords": $(json_array "${keywords[@]}")
+EOF
+}
+
+# kimi_manifest SKILLS-PATH: the Kimi Code manifest for the current pack.
+kimi_manifest() {
+  cat <<EOF
+{
+  "name": "$plugin",
+  "version": "$version",
+  "description": "$(json_escape "$description")",
+  "skills": ["$1"]
+}
+EOF
 }
 
 tmp=$(mktemp -d)
@@ -195,6 +277,26 @@ trap 'rm -rf "$tmp"' EXIT
 for pack in ${packs[@]+"${packs[@]}"}; do
   build_pack "$pack" "$tmp"
 done
+
+# Repository-root entry points for the root pack.
+[ -d "$tmp/$root_pack-skills" ] || die "root pack '$root_pack' has no bundle (expected skills/$root_pack/ or hooks/$root_pack/)"
+grep -qF "\"./plugins/$root_pack-skills/skills\"" package.json ||
+  die "package.json: the \"pi\" skills list must name ./plugins/$root_pack-skills/skills"
+grep -qF "\"./plugins/$root_pack-skills/index.js\"" index.js ||
+  die "index.js must load ./plugins/$root_pack-skills/index.js"
+root_files=(.kimi-plugin/plugin.json .grok-plugin/plugin.json .grok-plugin/marketplace.json)
+(
+  plugin="$root_pack-skills"
+  pack_meta "$root_pack"
+  common=$(manifest_common)
+  mkdir -p "$tmp/.root/.kimi-plugin" "$tmp/.root/.grok-plugin"
+  kimi_manifest "./plugins/$plugin/skills/" > "$tmp/.root/.kimi-plugin/plugin.json"
+  # Without it, Grok Build installs the repository root as a plugin of its
+  # own and loads every SKILL.md under skills/, including skills/in-progress/.
+  printf '{\n%s,\n  "skills": "./plugins/%s/skills/",\n  "hooks": []\n}\n' "$common" "$plugin" \
+    > "$tmp/.root/.grok-plugin/plugin.json"
+  cp .claude-plugin/marketplace.json "$tmp/.root/.grok-plugin/marketplace.json"
+)
 
 # Bundles on disk that no pack produces would ship stale content.
 for d in plugins/*/; do
@@ -224,6 +326,10 @@ if [ "$mode" = check ]; then
         echo "out of sync: plugins/$plugin/$f differs from its canonical source" >&2; drift=1; }
     done < <(comm -12 <(printf '%s\n' "$expected") <(printf '%s\n' "$actual"))
   done
+  for f in "${root_files[@]}"; do
+    cmp -s "$tmp/.root/$f" "$f" || {
+      echo "out of sync: $f differs from its canonical source" >&2; drift=1; }
+  done
   if [ "$drift" -ne 0 ]; then
     echo "sync-plugins.sh: plugins/ is out of sync; run: bash scripts/sync-plugins.sh" >&2
     exit 1
@@ -231,6 +337,12 @@ if [ "$mode" = check ]; then
   echo "ok: plugins/ in sync (version $version, ${#packs[@]} pack(s))."
   exit 0
 fi
+
+for f in "${root_files[@]}"; do
+  mkdir -p "$(dirname "$f")"
+  cp "$tmp/.root/$f" "$f"
+done
+echo "synced ${root_files[*]} ($root_pack-skills, version $version)"
 
 for d in "$tmp"/*/; do
   [ -d "$d" ] || continue

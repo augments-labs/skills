@@ -34,9 +34,20 @@ _cx_exec() { # $1 work dir, then codex exec arguments
       codex exec --json --skip-git-repo-check -C "$wd" ${extra[@]+"${extra[@]}"} "$@" )
 }
 
-adapter_run_behavioral() { # $1 work dir $2 prompt file $3 stream
-  _cx_exec "$1" --full-auto "$(cat "$2")" > "$3" 2>> "${errlog:-/dev/null}"
+# Follow-ups resume the run's latest session (CODEX_HOME holds only this
+# run's sessions) from the same work tree and append their events to the
+# stream. Like the rest of this adapter, not yet verified against a live CLI.
+adapter_run_behavioral() { # $1 work dir $2 prompt file $3 stream [$4 follow-ups file]
+  local start="$SECONDS"
+  _cx_exec "$1" --full-auto "$(cat "$2")" > "$3" 2>> "${errlog:-/dev/null}" || return $?
+  [ -z "${4:-}" ] || lab_each_followup "$4" "$start" _cx_followup "$1" "$3"
 }
+
+_cx_followup() { # $1 work dir $2 stream $3 message
+  _cx_exec "$1" --full-auto resume --last "$3" >> "$2" 2>> "${errlog:-/dev/null}"
+}
+
+adapter_supports_followups() { true; }
 
 adapter_run_activation() { # $1 work dir $2 prompt $3 stream
   _cx_exec "$1" -s read-only "$2" > "$3" 2>> "${errlog:-/dev/null}"

@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "name": "engineering-skills",
+  "version": "0.1.0",
+  "description": "Engineering constraints, verification, production-safety skills, and deterministic hooks for coding agents.",
+  "compat": {
+    "source": "native",
+    "manifestDir": ".muse-plugin"
+  },
+  "capabilities": {
+    "skills": [
+      { "id": "debugging", "path": "skills/debugging/SKILL.md" },
+      { "id": "test-driven-development", "path": "skills/test-driven-development/SKILL.md" }
+    ]
+  }
+}

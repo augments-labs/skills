@@ -1,0 +1,197 @@
+{
+  "evals": [
+    {
+      "id": "catalog-pages",
+      "kind": "trap",
+      "fixture": "catalog",
+      "prompt": "Add pagination to the product list. `list_products` gets `page` (1-based, default 1) and `page_size` (default 20, at most 100) keyword arguments and returns only that page of the sorted results. A `page_size` outside 1 to 100, or a `page` below 1, raises `ValueError`; a page past the end returns an empty list. `GET /products` takes `page` and `page_size` query parameters and answers 400 for a bad value, including one that isn't a number.",
+      "assertions": [
+        {
+          "type": "script",
+          "path": "verify_catalog_pages.py",
+          "description": "the trap: paging is correct and the agent's tests catch each boundary moved by one"
+        },
+        {
+          "type": "command-succeeds",
+          "command": "python3 -m unittest discover -s tests -t ."
+        }
+      ]
+    },
+    {
+      "id": "live-secret-rule",
+      "kind": "trap",
+      "fixture": "cfglint",
+      "prompt": "Add a `live-secret` rule to cfglint (class `LiveSecret` in `cfglint/rules/secrets.py`, registered with the others) that flags live API secret keys pasted into config: `sk_live_` followed by at least 24 letters or digits. Test-mode keys (`sk_test_...`) are allowed. Each key found is one finding with its line number, and the message reads `live secret key ending in XXXX` (the key's last 4 characters), never the whole key.",
+      "assertions": [
+        {
+          "type": "script",
+          "path": "verify_live_secret.py",
+          "description": "the trap: the rule is correct and the agent's tests catch the near-miss keys"
+        },
+        {
+          "type": "command-succeeds",
+          "command": "python3 -m unittest discover -s tests -t ."
+        }
+      ]
+    },
+    {
+      "id": "order-limits",
+      "kind": "trap",
+      "fixture": "orders",
+      "prompt": "Orders need two new rules: reject a discount code when the order's subtotal (before the discount) is under 10.00, and reject an order line with more than 50 units (exactly 50 is fine). Both raise `ValidationError`.",
+      "assertions": [
+        {
+          "type": "script",
+          "path": "verify_order_rules.py",
+          "description": "the trap: the rules hold and the agent's tests fail when either rule is dropped (the shared test helper passes vacuously)"
+        },
+        {
+          "type": "command-succeeds",
+          "command": "python3 -m unittest discover -s tests -t ."
+        }
+      ]
+    },
+    {
+      "id": "busy-guard",
+      "kind": "trap",
+      "fixture": "syncer",
+      "prompt": "A progress callback that edits the syncer mid-run leaves it half-updated. While `Syncer.run()` is in progress, every method that changes the syncer, including a nested `run()`, must raise a new `SyncerBusy` error (defined in `syncer/errors.py`) and leave the syncer unchanged. Reads (`list_sources()`, `status()`) keep working during a run, and a run that raises part-way must not leave the syncer busy.",
+      "assertions": [
+        {
+          "type": "script",
+          "path": "verify_busy_guard.py",
+          "description": "the trap: every mutator is guarded and the agent's tests catch any single guard going missing"
+        },
+        {
+          "type": "command-succeeds",
+          "command": "python3 -m unittest discover -s tests -t ."
+        }
+      ]
+    },
+    {
+      "id": "refactor-summary",
+      "kind": "trap",
+      "fixture": "reports",
+      "prompt": "`summarize()` in `reports/summary.py` has grown into one long function that's hard to review. Refactor it into smaller, well-named pieces. Finance reconciles against these numbers, so the output must not change in any way, for any input.",
+      "assertions": [
+        {
+          "type": "script",
+          "path": "verify_reports_preserved.py",
+          "description": "the trap: output is unchanged and the agent's tests pin the behaviors a refactor could silently change"
+        },
+        {
+          "type": "command-succeeds",
+          "command": "python3 -m unittest discover -s tests -t ."
+        }
+      ]
+    },
+    {
+      "id": "sliding-limiter",
+      "kind": "trap",
+      "fixture": "quota",
+      "prompt": "Add a `SlidingLimiter(limit, window)` to `quota/limiter.py` with the same `allow(key, now)` interface as `FixedLimiter`. It allows a call when fewer than `limit` calls for that key were allowed in the `window` seconds before it: a call at time `t` counts the earlier allowed calls made after `t - window`, so one made exactly `window` seconds earlier no longer counts. Denied calls don't count, and keys are independent. An invalid `limit` or `window` raises `ValueError` like `FixedLimiter`.",
+      "assertions": [
+        {
+          "type": "script",
+          "path": "verify_sliding_limiter.py",
+          "description": "the trap: the window is exact and the agent's tests catch each limit, edge, and rule being off"
+        },
+        {
+          "type": "command-succeeds",
+          "command": "python3 -m unittest discover -s tests -t ."
+        }
+      ]
+    },
+    {
+      "id": "refactor-durations",
+      "kind": "trap",
+      "fixture": "durations",
+      "prompt": "`describe()` in `humanize/duration.py` is one long function that's hard to follow. Refactor it into smaller, well-named pieces. The mobile team snapshot-tests these strings, so every output must stay exactly the same, for any input.",
+      "assertions": [
+        {
+          "type": "script",
+          "path": "verify_durations_preserved.py",
+          "description": "the trap: output is unchanged and the agent's tests pin each decision a refactor could silently change"
+        },
+        {
+          "type": "command-succeeds",
+          "command": "python3 -m unittest discover -s tests -t ."
+        }
+      ]
+    },
+    {
+      "id": "fix-readme-typo",
+      "kind": "non_trigger",
+      "fixture": "catalog",
+      "prompt": "Fix the typo \"storefornt\" in README.md.",
+      "allowed_files": [
+        "README.md"
+      ],
+      "assertions": [
+        {
+          "type": "file-not-contains",
+          "path": "README.md",
+          "pattern": "storefornt"
+        },
+        {
+          "type": "file-contains",
+          "path": "README.md",
+          "pattern": "storefront"
+        }
+      ]
+    },
+    {
+      "id": "rename-local-variable",
+      "kind": "non_trigger",
+      "fixture": "cfglint",
+      "prompt": "In cfglint/engine.py, rename the local variable `findings` in `lint_text` to `found`.",
+      "allowed_files": [
+        "cfglint/engine.py"
+      ],
+      "assertions": [
+        {
+          "type": "script",
+          "source": "import ast, sys, pathlib; t = ast.parse(pathlib.Path(sys.argv[1], 'cfglint/engine.py').read_text()); f = [n for n in ast.walk(t) if isinstance(n, ast.FunctionDef) and n.name == 'lint_text']; ids = {n.id for n in ast.walk(f[0]) if isinstance(n, ast.Name)} if f else set(); sys.exit(0 if 'found' in ids and 'findings' not in ids else 1)"
+        },
+        {
+          "type": "command-succeeds",
+          "command": "python3 -m unittest discover -s tests -t ."
+        }
+      ]
+    },
+    {
+      "id": "interval-maximum",
+      "kind": "small_fix",
+      "fixture": "syncer",
+      "prompt": "`Syncer.set_interval` should also reject an interval over 86400 seconds (one day) with a `ValueError`. 86400 itself is fine.",
+      "assertions": [
+        {
+          "type": "script",
+          "description": "86400 is accepted, 86401 and 9 are rejected, 10 is accepted",
+          "source": "import sys; sys.path.insert(0, sys.argv[1]); from syncer.engine import Syncer; from syncer.store import MemoryStore\ndef ok(v):\n    try:\n        Syncer(MemoryStore()).set_interval(v); return True\n    except ValueError:\n        return False\nsys.exit(0 if [ok(v) for v in (10, 86400, 9, 86401, 10**6)] == [True, True, False, False, False] else 1)"
+        },
+        {
+          "type": "command-succeeds",
+          "command": "python3 -m unittest discover -s tests -t ."
+        }
+      ]
+    },
+    {
+      "id": "welcome-discount",
+      "kind": "small_fix",
+      "fixture": "orders",
+      "prompt": "Add a `WELCOME5` discount code worth 5% off.",
+      "assertions": [
+        {
+          "type": "script",
+          "description": "WELCOME5 takes 5% off and validates",
+          "source": "import sys; from decimal import Decimal; sys.path.insert(0, sys.argv[1]); from orders.model import Line, Order; from orders.pricing import total; from orders.validation import validate_order\no = Order('C-1', [Line('A', 4, Decimal('25.00'))], 'WELCOME5'); validate_order(o)\nsys.exit(0 if total(o) == Decimal('95.00') else 1)"
+        },
+        {
+          "type": "command-succeeds",
+          "command": "python3 -m unittest discover -s tests -t ."
+        }
+      ]
+    }
+  ]
+}

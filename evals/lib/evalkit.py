@@ -146,6 +146,13 @@ def load_cases(evals_path, only=None):
             raise Invalid(f"{where}: 'kind' must be one of {', '.join(KINDS)}")
         if not isinstance(c.get("prompt"), str) or not c["prompt"].strip():
             raise Invalid(f"{where}: needs a non-empty 'prompt'")
+        followups = c.get("followups")
+        if "followups" in c:
+            if not isinstance(followups, list) or not followups:
+                raise Invalid(f"{where}: 'followups' must be a non-empty list of messages")
+            for j, m in enumerate(followups):
+                if not isinstance(m, str) or not m.strip():
+                    raise Invalid(f"{where}.followups[{j}]: a follow-up must be a non-empty string")
         if "fixture" in c:
             safe_rel(c["fixture"], where)
             if not os.path.isdir(os.path.join(case_dir, "files", c["fixture"])):
@@ -162,9 +169,12 @@ def load_cases(evals_path, only=None):
             raise Invalid(f"{where}: {c['kind']} cases need at least one assertion")
         for j, a in enumerate(assertions):
             validate_assertion(a, f"{where}.assertions[{j}]", case_dir)
-        out.append({"id": cid, "kind": c["kind"], "prompt": c["prompt"],
-                    "fixture": c.get("fixture"), "allowed_files": allowed,
-                    "assertions": assertions})
+        case = {"id": cid, "kind": c["kind"], "prompt": c["prompt"]}
+        if "followups" in c:
+            case["followups"] = followups
+        case.update({"fixture": c.get("fixture"), "allowed_files": allowed,
+                     "assertions": assertions})
+        out.append(case)
     if only:
         missing = [x for x in only if x not in seen]
         if missing:
@@ -688,7 +698,15 @@ def cmd_record_name(args):
     date = (args[1] if len(args) > 1 and args[1] else stamp[:10])
     if not re.match(r"^\d{4}-\d{2}-\d{2}$", date):
         raise Invalid(f"bad date {date!r}")
-    print(f"{date}-{rec['pack']}-{rec['skill']}-{rec['harness']}{suffix}")
+    model = model_slug(rec.get("model"))
+    print(f"{date}-{rec['pack']}-{rec['skill']}-{rec['harness']}{'-' + model if model else ''}{suffix}")
+
+
+def model_slug(model):
+    """A record name's model part: the model id lowercased, other characters as single dashes."""
+    if not isinstance(model, str):
+        return ""
+    return re.sub(r"[^a-z0-9]+", "-", model.lower()).strip("-")
 
 
 def pct(x):
@@ -714,7 +732,7 @@ def scoreboard_rows(results_dir):
     for path in sorted(glob.glob(os.path.join(results_dir, "*", "benchmark.json"))):
         try:
             rec = load_json(path)
-            key = (rec["pack"], rec["skill"])
+            key = (rec["pack"], rec["skill"], str(rec.get("model") or ""))
             order = (rec.get("measured_at", ""), os.path.basename(os.path.dirname(path)))
         except (OSError, ValueError, KeyError, TypeError):
             continue

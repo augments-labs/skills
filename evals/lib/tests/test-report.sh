@@ -46,11 +46,11 @@ check "the evaluate run produced a record" test -f "$ws1/benchmark.json"
 measured="$(jq -r '.measured_at[0:10]' "$ws1/benchmark.json")"
 report "$ws1" --date 2026-01-02
 eq "recording exits 0" 0 "$rc"
-target="$results/2026-01-02-engineering-demo-skill-fake"
+target="$results/2026-01-02-engineering-demo-skill-fake-fake-model-1"
 eq "it prints the record path" "$target/benchmark.json" "$(cat "$TL_TMP/report.out")"
 eq "the results dir holds only the record" "benchmark.json" "$(ls -A "$target")"
 check "the record is copied verbatim" cmp -s "$ws1/benchmark.json" "$target/benchmark.json"
-row="| \`engineering/demo-skill\` | \`distilled\` | 100% vs 0% | +0 calls / +0 calls, +0 turns | +0 output (small fix) | fake-model-1, $measured | [2026-01-02-engineering-demo-skill-fake](evals/results/2026-01-02-engineering-demo-skill-fake/benchmark.json) |"
+row="| \`engineering/demo-skill\` | \`distilled\` | 100% vs 0% | +0 calls / +0 calls, +0 turns | +0 output (small fix) | fake-model-1, $measured | [2026-01-02-engineering-demo-skill-fake-fake-model-1](evals/results/2026-01-02-engineering-demo-skill-fake-fake-model-1/benchmark.json) |"
 contains "the scoreboard row is rendered" "$readme" "$row"
 lacks "the pending row is replaced" "$readme" "Pending first evaluated promotion"
 contains "the header is kept" "$readme" "| Skill | Arm shipped | Pass rate (\`shipped\` vs \`none\`) | Control delta (non-trigger / small fix) | Token delta | Model & date | Record |"
@@ -77,9 +77,25 @@ contains "the repaired row" "$readme" "$row"
 ws2="$(bench_ws eval-2 --shipped-arm full)"
 report "$ws2" --date 2026-01-03
 eq "a second record exits 0" 0 "$rc"
-eq "one row per skill" 1 "$(grep -c '^| `engineering/demo-skill`' "$readme")"
+eq "one row per skill and model" 1 "$(grep -c '^| `engineering/demo-skill`' "$readme")"
 contains "the latest record is shown" "$readme" "| \`engineering/demo-skill\` | \`full\` | 100% vs 0% |"
-contains "it links the latest record" "$readme" "(evals/results/2026-01-03-engineering-demo-skill-fake/benchmark.json)"
+contains "it links the latest record" "$readme" "(evals/results/2026-01-03-engineering-demo-skill-fake-fake-model-1/benchmark.json)"
+
+# Each model keeps its own row; the model id is slugged into the record name.
+mkdir -p "$TL_TMP/mod/other-model"
+jq '.model = "Other/Model 2.0"' "$ws2/benchmark.json" > "$TL_TMP/mod/other-model/benchmark.json"
+report "$TL_TMP/mod/other-model" --date 2026-01-03
+eq "another model's record exits 0" 0 "$rc"
+check "the model id is slugged into the record name" test -f "$results/2026-01-03-engineering-demo-skill-fake-other-model-2-0/benchmark.json"
+eq "one row per skill and model" 2 "$(grep -c '^| `engineering/demo-skill`' "$readme")"
+contains "the first model's row stays" "$readme" "(evals/results/2026-01-03-engineering-demo-skill-fake-fake-model-1/benchmark.json)"
+contains "the other model gets a row" "$readme" "| Other/Model 2.0, "
+mkdir -p "$TL_TMP/mod/no-model"
+jq 'del(.model)' "$ws2/benchmark.json" > "$TL_TMP/mod/no-model/benchmark.json"
+report "$TL_TMP/mod/no-model" --date 2026-01-05
+check "a record without a model keeps the plain name" test -f "$results/2026-01-05-engineering-demo-skill-fake/benchmark.json"
+rm -rf "$results/2026-01-03-engineering-demo-skill-fake-other-model-2-0" "$results/2026-01-05-engineering-demo-skill-fake"
+report --scoreboard
 
 # --- records that are refused -------------------------------------------------
 refused() { # $1 description $2 expected error fragment, rest: report args
@@ -120,7 +136,7 @@ cp "$readme" "$TL_TMP/README.before-trig"
 wt="$(trig_ws trig-1)"
 report "$wt" --date 2026-01-04
 eq "recording triggering exits 0" 0 "$rc"
-eq "a triggering record gets the -triggering suffix" "triggering.json" "$(ls -A "$results/2026-01-04-engineering-demo-skill-fake-triggering")"
+eq "a triggering record gets the -triggering suffix" "triggering.json" "$(ls -A "$results/2026-01-04-engineering-demo-skill-fake-fake-model-1-triggering")"
 check "a triggering record leaves the scoreboard alone" cmp -s "$readme" "$TL_TMP/README.before-trig"
 printf 'Use when renaming a widget or a gadget.\n' > "$TL_TMP/cand.txt"
 wc_="$(trig_ws trig-candidate --description-file "$TL_TMP/cand.txt")"
