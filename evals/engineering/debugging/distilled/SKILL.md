@@ -1,6 +1,6 @@
 ---
 name: debugging
-description: "Finds the cause of a bug before fixing it. Use when a bug, test failure, flaky or CI-only failure, or unexpected behavior has an unknown cause, or the user asks why something breaks. Skip one-line errors with a visible cause, live outages (contain first), and post-incident reviews."
+description: "Diagnoses and fixes bugs by proving the root cause before patching. Use for a bug, failing or flaky test, CI failure, regression after a merge or upgrade, hang, memory leak or OOM, wrong or empty output, unexplained behavior, or when asked why something breaks or fails to reproduce locally. Skip obvious one-line fixes with a clear cause and fix (typo, missing import, direct null check), live outages (contain first), and post-incident reviews."
 ---
 
 # Debugging

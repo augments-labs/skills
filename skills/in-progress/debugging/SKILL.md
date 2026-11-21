@@ -1,6 +1,6 @@
 ---
 name: debugging
-description: "Finds the cause of a bug before fixing it. Use when a bug, test failure, flaky or CI-only failure, or unexpected behavior has an unknown cause, or the user asks why something breaks. Skip one-line errors with a visible cause, live outages (contain first), and post-incident reviews."
+description: "Diagnoses and fixes bugs by proving the root cause before patching. Use for a bug, failing or flaky test, CI failure, regression after a merge or upgrade, hang, memory leak or OOM, wrong or empty output, unexplained behavior, or when asked why something breaks or fails to reproduce locally. Skip obvious one-line fixes with a clear cause and fix (typo, missing import, direct null check), live outages (contain first), and post-incident reviews."
 ---
 
 # Debugging
@@ -11,10 +11,12 @@ failure is never permission to guess.
 
 ## When to use
 
-- A bug, failing test, flaky or CI-only failure, or surprising behavior whose
-  cause you do not know yet.
-- **Skip** an error whose cause and full effect are visible in the message,
-  such as a typo in a name or a missing import. Fix it directly.
+- A bug, failing or flaky test, CI failure, regression after a merge or
+  upgrade, hang, memory leak or OOM, wrong or empty output, or unexplained
+  behavior whose root cause is not yet verified.
+- **Skip** obvious one-line fixes where the error already shows both the cause
+  and the fix, such as a typo, a missing import, or a direct null check with a
+  known fallback. Fix those directly.
 - **Skip** diagnosis while real users are failing right now. Contain the
   impact first (roll back, turn off the flag, fail over), or ask the user to,
   then come back to find the cause.
