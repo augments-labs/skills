@@ -107,17 +107,87 @@ codex plugin add engineering-skills@augments-labs
 agy plugin install https://github.com/augments-labs/skills/tree/main/plugins/engineering-skills
 ```
 
+### pi
+
+```bash
+pi install git:github.com/augments-labs/skills
+```
+
+### Grok Build
+
+```bash
+grok plugin marketplace add augments-labs/skills
+grok plugin install engineering-skills
+```
+
+Grok asks you to trust the plugin before it enables it.
+
+### Muse Code
+
+```bash
+muse plugins marketplace add augments-labs https://github.com/augments-labs/skills.git
+muse plugins install engineering-skills@augments-labs
+```
+
+### Hermes
+
+```bash
+hermes plugins install augments-labs/skills/plugins/engineering-skills --enable
+```
+
+Hermes scans the plugin before installing it and rates it `caution`, because the bundled hook scripts name `sudo` so they can recognize it in commands. Hermes never runs those scripts. Confirm at the prompt to install.
+
+### Kimi Code
+
+Inside Kimi Code, install the repository archive or the path of a local clone:
+
+```text
+/plugins install https://github.com/augments-labs/skills/archive/refs/heads/main.zip
+```
+
+### OpenCode
+
+OpenCode 2.x:
+
+```bash
+opencode plugin add git+https://github.com/augments-labs/skills.git
+```
+
+OpenCode 1.x: clone the repository and add the path of its `index.js` to the `plugin` list in your `opencode.json`. This path has not been tested on a 1.x CLI yet.
+
+### Cursor
+
+```bash
+git clone https://github.com/augments-labs/skills.git
+mkdir -p ~/.cursor/plugins/local
+cp -R skills/plugins/engineering-skills ~/.cursor/plugins/local/engineering-skills
+```
+
+Copy the folder rather than linking it: Cursor does not load a link that points outside `~/.cursor/plugins/local/`.
+
+### Devin
+
+```bash
+devin plugins install augments-labs/skills#plugins/engineering-skills
+```
+
+> Note: The Cursor and Devin installs have not been tested end to end yet. Both CLIs load plugins only for a signed-in account, and the install tests run signed out.
+
 ### Skill-only install (`npx skills`)
 
 ```bash
 npx skills add augments-labs/skills/plugins/engineering-skills
 ```
 
-> Note: `npx skills add` installs `SKILL.md` files only, without deterministic hooks. For hook enforcement, install through your harness's plugin mechanism above. [`docs/hooks.md`](docs/hooks.md) lists what the hooks block and how to turn them off.
+### Which installs run hooks
 
-### Other harnesses
+The hooks run in Claude Code, Codex CLI, and Antigravity. Every other install above gives you the skills only:
 
-Native plugin bundles for Cursor, Devin, OpenCode, pi, Kimi Code, Hermes, Grok Build, and Muse Code are planned for the next release. Until then, use the skill-only install above on harnesses that read Agent Skills.
+- The Cursor, Grok Build, Kimi Code, and Muse Code manifests declare no hooks, so those harnesses never load the bundled hook files.
+- Devin loads the bundle's hook files, but the hook scripts are not adapted to it, so they allow every call when Devin runs them.
+- pi, Hermes, OpenCode, and `npx skills add` read skills only.
+
+[`docs/hooks.md`](docs/hooks.md) lists what the hooks block and how to turn them off.
 
 ## Documentation
 

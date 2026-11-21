@@ -6,6 +6,11 @@ All notable changes to `augments-labs/skills` are documented here. Entries follo
 
 ## [Unreleased]
 
+- `engineering-skills` now installs on Cursor, Devin, OpenCode, pi, Grok Build,
+  Hermes, Kimi Code, and Muse Code, with the skills only. The hooks still run
+  in Claude Code, Codex CLI, and Antigravity, and stay out of, or inert in, the
+  other harnesses.
+
 ## [0.0.1] - 2026-11-21
 
 - First release of the `engineering-skills` plugin for Claude Code, Codex CLI,
