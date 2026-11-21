@@ -100,6 +100,69 @@
       "query": "Write unit tests for weatherkit/units.py.",
       "should_trigger": false,
       "split": "holdout"
+    },
+    {
+      "query": "Users say `SyncClient.list_stations()` in weatherkit returns too few stations for large networks: a network with 250 stations only gets 200 back. Please fix it.",
+      "should_trigger": true,
+      "split": "train"
+    },
+    {
+      "query": "CI fails on `bash test.sh` (exit code 1) even though the output says all 8 tests passed. I think test_concurrent_append is flaky. Can you get the build green?",
+      "should_trigger": true,
+      "split": "train",
+      "fixture": "ledger"
+    },
+    {
+      "query": "Last night's import rejected fixtures/failed_batch.jsonl; other batches import fine. Fix the importer so this batch imports.",
+      "should_trigger": true,
+      "split": "train",
+      "fixture": "ingest"
+    },
+    {
+      "query": "EU customers still sometimes see US prices. We've shipped three fixes for this in shop/pricing.py (the `fix attempt` blocks) and tests/test_regions.py still fails. Please sort it out.",
+      "should_trigger": true,
+      "split": "train",
+      "fixture": "pricing"
+    },
+    {
+      "query": "test_unique_ids_under_load fails in CI about one run in five with `AssertionError: duplicate job ids`. It passed all three times I ran it locally. Please fix it.",
+      "should_trigger": true,
+      "split": "train",
+      "fixture": "jobs"
+    },
+    {
+      "query": "tests/test_service.py started failing after yesterday's merge with `TypeError: send() got an unexpected keyword argument 'priority'`. Can you fix it?",
+      "should_trigger": true,
+      "split": "train",
+      "fixture": "notify"
+    },
+    {
+      "query": "`python3 -m weatherkit.cli list --offline` crashes:\n\n```text\nTraceback (most recent call last):\n  File \"<frozen runpy>\", line 198, in _run_module_as_main\n  File \"<frozen runpy>\", line 88, in _run_code\n  File \"weatherkit/cli.py\", line 52, in <module>\n    sys.exit(main())\n             ~~~~^^\n  File \"weatherkit/cli.py\", line 36, in main\n    print(station_row(station))\n          ~~~~~~~~~~~^^^^^^^^^\n  File \"weatherkit/format.py\", line 11, in station_row\n    return f\"{station.id:<10} {display_name(station):<28} {lat:>9} {lon:>9}\"\n                               ~~~~~~~~~~~~^^^^^^^^^\n  File \"weatherkit/format.py\", line 5, in display_name\n    return station.name.strip().title()\n           ^^^^^^^^^^^^^^^^^^\nAttributeError: 'NoneType' object has no attribute 'strip'\n```\n\nStations without a name should show as `Unnamed station`. Fix it.",
+      "should_trigger": false,
+      "split": "train"
+    },
+    {
+      "query": "`python3 -m weatherkit.cli show DK-0005 --offline` crashes:\n\n```text\nTraceback (most recent call last):\n  File \"<frozen runpy>\", line 198, in _run_module_as_main\n  File \"<frozen runpy>\", line 88, in _run_code\n  File \"weatherkit/cli.py\", line 52, in <module>\n    sys.exit(main())\n             ~~~~^^\n  File \"weatherkit/cli.py\", line 47, in main\n    print(station_detail(station))\n          ~~~~~~~~~~~~~~^^^^^^^^^\n  File \"weatherkit/format.py\", line 22, in station_detail\n    f\"  elevation: {feet(station.elevation_m)} ft\",\n                    ~~~~^^^^^^^^^^^^^^^^^^^^^\n  File \"weatherkit/units.py\", line 5, in feet\n    return round(meters * FEET_PER_METER)\n                 ~~~~~~~^~~~~~~~~~~~~~~~\nTypeError: unsupported operand type(s) for *: 'NoneType' and 'float'\n```\n\nA station with no elevation should show `n/a` for elevation. Fix it.",
+      "should_trigger": false,
+      "split": "train"
+    },
+    {
+      "query": "Last night's invoice run crashed in production with `TypeError: PaymentsAPI.charge() missing 1 required keyword-only argument: 'idempotency_key'`, yet the whole test suite passes. Can you fix it?",
+      "should_trigger": true,
+      "split": "train",
+      "fixture": "billing"
+    },
+    {
+      "query": "tests/test_service.py has been failing since the SQLite user store merged (test_register_twice_is_rejected and test_close_unknown_member). Can you fix it?",
+      "should_trigger": true,
+      "split": "train",
+      "fixture": "accounts"
+    },
+    {
+      "query": "test_summary_matches_golden has been failing since we added the Region column to the summary report. The new layout is intended (see CHANGELOG.md). Can you get the suite green?",
+      "should_trigger": true,
+      "split": "train",
+      "fixture": "reports"
     }
   ]
 }
