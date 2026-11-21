@@ -71,20 +71,23 @@ Every promoted skill body under `skills/engineering/` is capped at 200 lines, 2,
 <!-- token-budget-table:start -->
 | Surface (`engineering-skills`) | Skills | Words | Approx tokens |
 | --- | --- | --- | --- |
-| Auto-triggered descriptions (657 chars) | 1 | n/a | 165 |
+| Auto-triggered descriptions (1201 chars) | 2 | n/a | 301 |
 | User-invoked descriptions (0 chars) | 0 | n/a | 0 |
-| Promoted skill bodies (if all loaded) | 1 | 1132 | 1648 |
+| Promoted skill bodies (if all loaded) | 2 | 2111 | 3049 |
 <!-- token-budget-table:end -->
 
 <!-- eval-scoreboard:start -->
 | Skill | Arm shipped | Pass rate (`shipped` vs `none`) | Control delta (non-trigger / small fix) | Token delta | Model & date | Record |
 | --- | --- | --- | --- | --- | --- | --- |
 | `engineering/debugging` | `full` | 100% vs 85% | +0.0 calls / +0.0 calls, +0.0 turns | -16 output (small fix) | claude-sonnet-5-5, 2026-11-21 | [2026-11-21-engineering-debugging-claude-code](evals/results/2026-11-21-engineering-debugging-claude-code/benchmark.json) |
+| `engineering/test-driven-development` | `full` | 100% vs 57% | +0 calls / +0 calls, +0 turns | +170 output (small fix) | claude-haiku-5-5, 2026-11-21 | [2026-11-21-engineering-test-driven-development-claude-code-claude-haiku-5-5](evals/results/2026-11-21-engineering-test-driven-development-claude-code-claude-haiku-5-5/benchmark.json) |
+| `engineering/test-driven-development` | `full` | 100% vs 81% | -0.5 calls / +0 calls, +0 turns | -137 output (small fix) | claude-opus-5-5, 2026-11-21 | [2026-11-21-engineering-test-driven-development-claude-code-claude-opus-5-5](evals/results/2026-11-21-engineering-test-driven-development-claude-code-claude-opus-5-5/benchmark.json) |
+| `engineering/test-driven-development` | `full` | 100% vs 38% | +0.0 calls / -1.5 calls, -1.5 turns | -168.5 output (small fix) | claude-sonnet-5-5, 2026-11-21 | [2026-11-21-engineering-test-driven-development-claude-code-claude-sonnet-5-5](evals/results/2026-11-21-engineering-test-driven-development-claude-code-claude-sonnet-5-5/benchmark.json) |
 <!-- eval-scoreboard:end -->
 
 ## Installation
 
-> **Pre-1.0 notice (`0.0.1`):** The `engineering-skills` plugin ships one evaluated skill (`debugging`) and two hooks (`guard-destructive-git`, `guard-protected-branch`). More skills ship as they pass evaluation, and pre-1.0 releases may change the pack's surface.
+> **Pre-1.0 notice (`0.0.1`):** The `engineering-skills` plugin ships two evaluated skills (`debugging`, `test-driven-development`) and two hooks (`guard-destructive-git`, `guard-protected-branch`). More skills ship as they pass evaluation, and pre-1.0 releases may change the pack's surface.
 
 ### Claude Code
 
