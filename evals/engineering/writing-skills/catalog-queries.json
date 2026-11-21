@@ -1,0 +1,70 @@
+{
+  "fixture": "catalog",
+  "queries": [
+    {
+      "query": "Customers keep finding products in search that we deleted two weeks ago. Can you sort it out?",
+      "should_trigger": true,
+      "split": "train"
+    },
+    {
+      "query": "We imported about 400 products from the supplier feed yesterday and none of them show up in search.",
+      "should_trigger": true,
+      "split": "validation"
+    },
+    {
+      "query": "The spring sale went live and search still shows the old prices, but the product pages have the new ones. Please fix.",
+      "should_trigger": true,
+      "split": "train"
+    },
+    {
+      "query": "catalog_search_drift_high has been firing since 02:00. Handle it.",
+      "should_trigger": true,
+      "split": "validation"
+    },
+    {
+      "query": "Run LAMPLIGHT.",
+      "should_trigger": true,
+      "split": "train"
+    },
+    {
+      "query": "Search results for the whole Garden category look stale since we merged it with Outdoor last week.",
+      "should_trigger": true,
+      "split": "train"
+    },
+    {
+      "query": "Do a full rebuild of the product search index.",
+      "should_trigger": true,
+      "split": "validation"
+    },
+    {
+      "query": "Search p95 latency jumped from 80 ms to 400 ms this morning. Find out why.",
+      "should_trigger": false,
+      "split": "train"
+    },
+    {
+      "query": "Add a `brand` filter parameter to search() in catalog/search.py, with a test.",
+      "should_trigger": false,
+      "split": "validation"
+    },
+    {
+      "query": "The search box overlaps the logo on mobile. Fix the CSS in static/search.css.",
+      "should_trigger": false,
+      "split": "train"
+    },
+    {
+      "query": "Write unit tests for format_price in catalog/pricing.py, including negative amounts.",
+      "should_trigger": false,
+      "split": "validation"
+    },
+    {
+      "query": "Searching for 'tshirt' returns nothing but 't-shirt' works. Can you fix that?",
+      "should_trigger": false,
+      "split": "train"
+    },
+    {
+      "query": "Turn docs/alerts.md into a short table of which team owns each alert.",
+      "should_trigger": false,
+      "split": "validation"
+    }
+  ]
+}

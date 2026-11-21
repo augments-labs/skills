@@ -1,0 +1,6 @@
+#!/usr/bin/env python3
+"""Catalog admin CLI. Needs the catalog-admin role and a cluster connection."""
+import sys
+
+print("catalogctl: no cluster configured in this environment", file=sys.stderr)
+sys.exit(1)
