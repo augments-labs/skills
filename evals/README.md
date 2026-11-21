@@ -36,6 +36,7 @@ evals/bin/triggering --pack PACK --skill NAME [--harness ...] [--runs 3]
     [--splits train,validation,holdout,negative] [--threshold 0.5] [--jobs 3]
     [--timeout 120] [--max-turns 6] [--description-file F] [--model NAME]
     [--out DIR] [--json] [--allow-unverified] [--dry-run]
+evals/bin/triggering --pack PACK --skill-dir DIR --queries FILE [options as above]
     exit: 0 all pass · 1 a query failed or was inconclusive · 2 bad args/unrunnable · 3 CLI missing
 
 evals/bin/optimize-description --pack PACK --skill NAME [--harness ...] [--runs 3]
@@ -84,6 +85,7 @@ A bundle holds `SKILL.md` and the skill's `scripts/`, `references/`, and `assets
 - **Kinds.** A `trap` case needs at least one assertion. A `non_trigger` case may list `allowed_files` (globs). Any other changed file is counted as `unrequested_files`. A `small_fix` case is a routine task the skill must not slow down.
 - **Assertions** are deterministic. Each path must stay inside the work tree, symlinks included. Patterns are Python regexes in multiline mode, and an assertion may set `"ignore_case": true`. A `git-count` counts `commits` or `changed_files` since the seed commit.
 - **`script`** gets either python3 `source` or a `path` relative to the case dir. It receives the work dir as `argv[1]`. Exit 0 passes, exit 1 fails, and any other code is `needs_review`. Verifiers and commands run with a scrubbed env (`PATH`, a scratch `HOME`, `EVAL_WORKDIR`, `EVAL_CHANGED_FILES`, `EVAL_SEED=seed`). A timeout is `needs_review`.
+- **`skill-triggering`** scores a skill the run wrote: `{"type": "skill-triggering", "path": ".agents/skills/*", "queries": "written-queries.json", "runs": 3, "threshold": 0.5}`. `path` is a glob in the work tree and `queries` a queries file in the case dir (its fixtures resolve under `files/` next to it); `runs` and `threshold` are optional. After the session, `evaluate` finds the one skill the run wrote under `path` and runs `evals/bin/triggering --skill-dir` on it, with the run's harness and model, into `<run>/triggering-<i>/`. It passes when every query passes. No skill, more than one, or a skill whose `name` is invalid or differs from its directory fails. An inconclusive query or a harness error is `needs_review`, and a refusal that leaves a query unscored makes the run indeterminate (`refusal`), so `--resume` reruns it. Each such case adds up to `queries x runs` short sessions per run; `--dry-run` counts them.
 - **Follow-ups.** An optional `"followups": ["Now update registry.txt to match.", "Thanks, that is all."]` (a non-empty list of non-empty strings) sends more messages after `prompt`, in order, into the same session, with the same home, work tree, and tools. The case is graded once, on the final work tree. The whole session shares one `--timeout`, and a follow-up that fails ends the session. A run keeps the first prompt in `prompt.txt` and the rest in `followups.json`. `stream.ndjson` holds every turn's events, appended in order. Metrics are summed over the turns, and `response.txt` is the final answer. On an adapter that cannot send follow-ups, the case runs no session at all and every run is indeterminate (`followups_unsupported`), so it is never graded on its first turn alone.
 - **Indeterminate runs.** A run is indeterminate if it hits any of these: a timeout, a nonzero exit, a refusal or usage limit, no model turn, a skill loaded in `none`, a setup failure, or follow-ups the adapter cannot send. Indeterminate runs are counted apart and never scored.
 
@@ -123,7 +125,7 @@ A bundle holds `SKILL.md` and the skill's `scripts/`, `references/`, and `assets
   {"query": "The billing tests fail since the refactor", "should_trigger": true, "split": "train", "fixture": "billing"}]}
 ```
 
-A query's `fixture` overrides the file-level one. Seed each query with the files it names: a request about files the work tree lacks leaves the model nothing to do but load the skill, which overstates the trigger rate.
+A query's `fixture` overrides the file-level one. `--queries FILE` scores another queries file; its fixtures resolve under `files/` next to it. `--skill-dir DIR` scores the skill in `DIR`, named by its `SKILL.md` `name`, instead of `--skill`. Like a candidate description, it records a `null` `skill_tree` and cannot be recorded. Seed each query with the files it names: a request about files the work tree lacks leaves the model nothing to do but load the skill, which overstates the trigger rate.
 
 ```
 {schema_version: 1, pack, skill, manual_only, harness, harness_version, model,

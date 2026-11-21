@@ -1,13 +1,14 @@
 #!/bin/sh
 # Scripted agent for the fake adapter (fake-cli/fake.sh). Deterministic
-# stand-in for a model: it "loads" demo-skill when the request matches the
-# installed skill, edits the seeded work tree the way a model with or without
-# the skill would, and prints the fake stream protocol on stdout.
+# stand-in for a model: it "loads" the installed skill when the request matches
+# it, edits the seeded work tree the way a model with or without the skill
+# would, and prints the fake stream protocol on stdout.
 #
 # Called as: agent.sh KIND WORKDIR PROMPT BUNDLE (see fake.sh). Behavior can be
 # steered by $FAKE_STATE/mode:
 #   dead        print nothing (no model turn)
 #   refuse      a provider refusal on stderr, exit 1
+#   refuse-activation  a provider refusal on activation sessions only
 #   crash       one turn, then exit 3
 #   crash-followup  a follow-up turn exits 3 (the first prompt runs normally)
 #   sleep       one turn, then sleep past any test timeout
@@ -16,6 +17,7 @@
 #   sprawl      with a bundle, write an unrequested file on the typo task
 #   parallel    briefly hold an active slot and record concurrency counts
 #   drain       read stdin to EOF first, as an agent CLI in print mode does
+#   skill-misnamed  a written skill's name differs from its directory
 # Every launch appends what it saw to $FAKE_STATE/launches, and a follow-up
 # appends its message (then a "--" line) to $FAKE_STATE/followups.
 kind="$1" wd="$2" prompt="$3" bundle="$4"
@@ -39,6 +41,8 @@ case "$mode" in
   drain) cat > /dev/null ;;
   dead) exit 0 ;;
   refuse) echo "error: usage limit reached for this account" >&2; exit 1 ;;
+  refuse-activation)
+    if [ "$kind" = activation ]; then echo "error: usage limit reached for this account" >&2; exit 1; fi ;;
   crash) echo "TURN"; exit 3 ;;
   crash-followup) if [ "$kind" = followup ]; then echo "TURN"; exit 3; fi ;;
   sleep) echo "TURN"; sleep 30; exit 0 ;;
@@ -53,9 +57,11 @@ case "$mode" in
     fi ;;
 esac
 
-skill_md=""
-if [ -n "$bundle" ] && [ -f "$bundle/skills/demo-skill/SKILL.md" ]; then
-  skill_md="$bundle/skills/demo-skill/SKILL.md"
+skill_md="" skill_name=""
+if [ -n "$bundle" ]; then
+  for f in "$bundle"/skills/*/SKILL.md; do
+    if [ -f "$f" ]; then skill_md="$f"; skill_name="$(basename "$(dirname "$f")")"; break; fi
+  done
 fi
 echo "MODEL fake-model-1"
 echo "TURN"
@@ -85,7 +91,7 @@ if [ "$kind" = activation ]; then
     [ "${#w}" -ge 5 ] || continue
     case "$desc" in
       *"$w"*)
-        echo "SKILL demo-skill"
+        echo "SKILL $skill_name"
         if [ "$mode" = linger ]; then sleep 30; fi
         exit 0 ;;
     esac
@@ -109,7 +115,7 @@ esac
 
 loaded=0
 if [ -n "$skill_md" ]; then
-  case "$p" in *widget*) loaded=1; echo "SKILL demo-skill" ;; esac
+  case "$p" in *widget*) loaded=1; echo "SKILL $skill_name" ;; esac
 fi
 if [ "$mode" = none-loads ] && [ -z "$bundle" ]; then echo "SKILL demo-skill"; fi
 
@@ -123,6 +129,17 @@ case "$p" in
       sed 's/oldWidget/newWidget/g' registry.txt > registry.txt.tmp && mv registry.txt.tmp registry.txt
     fi
     echo "TOKENS 120" ;;
+  *"Write a skill"*)
+    # With the skill loaded it names the plain requests too; without, only
+    # the procedure. A misnamed skill fails validation before any triggering.
+    desc="Use when renaming a widget."
+    [ "$loaded" = 1 ] && desc="Use when renaming a widget or a gadget."
+    name=gadget-helper
+    [ "$mode" = skill-misnamed ] && name=gadget-helpers
+    echo "TOOL Write"
+    mkdir -p .agents/skills/gadget-helper
+    printf -- '---\nname: %s\ndescription: "%s"\n---\n# Gadget helper\n' "$name" "$desc" > .agents/skills/gadget-helper/SKILL.md
+    echo "TOKENS 50" ;;
   *"Fix the typo"*)
     echo "TOOL Edit"
     sed 's/Teh/The/' README.md > README.md.tmp && mv README.md.tmp README.md

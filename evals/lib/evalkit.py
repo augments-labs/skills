@@ -18,10 +18,14 @@ from datetime import datetime, timezone
 
 KINDS = ("trap", "non_trigger", "small_fix")
 ASSERTION_TYPES = ("file-exists", "file-contains", "file-not-contains",
-                   "command-succeeds", "git-count", "script")
+                   "command-succeeds", "git-count", "script", "skill-triggering")
 ARMS = ("full", "distilled", "none", "old_skill")
 SPLITS = ("train", "validation", "holdout", "negative")
 ID_RE = re.compile(r"^[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?$")
+SKILL_NAME_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
+# skill-triggering defaults: runs per query and the trigger-rate threshold.
+WRITTEN_SKILL_RUNS = 3
+WRITTEN_SKILL_THRESHOLD = 0.5
 
 # Decision table (evals/README.md): distilled ships when it beats none by at
 # least this much, passes both control gates, and full adds less than
@@ -119,6 +123,21 @@ def validate_assertion(a, where, case_dir):
             safe_rel(a["path"], where)
             if not os.path.isfile(os.path.join(case_dir, a["path"])):
                 raise Invalid(f"{where}: verifier not found: {a['path']}")
+    if t == "skill-triggering":
+        safe_rel(a.get("path"), where)
+        safe_rel(a.get("queries"), where)
+        qpath = os.path.join(case_dir, a["queries"])
+        if not os.path.isfile(qpath):
+            raise Invalid(f"{where}: queries file not found: {a['queries']}")
+        try:
+            load_queries(qpath, False)
+        except Invalid as e:
+            raise Invalid(f"{where}: {a['queries']}: {e}")
+        if "runs" in a and (not isinstance(a["runs"], int) or isinstance(a["runs"], bool) or a["runs"] < 1):
+            raise Invalid(f"{where}: skill-triggering 'runs' must be a positive integer")
+        thr = a.get("threshold", WRITTEN_SKILL_THRESHOLD)
+        if isinstance(thr, bool) or not isinstance(thr, (int, float)) or not 0 < thr < 1:
+            raise Invalid(f"{where}: skill-triggering 'threshold' must be between 0 and 1")
 
 
 def load_cases(evals_path, only=None):
@@ -224,8 +243,32 @@ def scratch_home():
     return _SCRATCH[0].name
 
 
-def grade_assertion(a, workdir, run_dir, case_dir):
+def grade_written_skill(tdir):
+    """Grades a skill-triggering assertion from what evals/bin/evaluate saved
+    in <run>/triggering-<i>/: the written skill's triggering on its queries."""
+    for name, status in (("invalid.txt", "fail"), ("error.txt", "needs_review")):
+        p = os.path.join(tdir, name)
+        if os.path.isfile(p):
+            with open(p, encoding="utf-8", errors="replace") as f:
+                return status, f.read().strip()[:400]
+    qr = os.path.join(tdir, "query-results.json")
+    if not os.path.isfile(qr):
+        return "needs_review", "the written skill's triggering was not run"
+    rows = load_json(qr)
+    detail = ", ".join(
+        f"{label} {sum(r['verdict'] == 'pass' for r in rows if r['should_trigger'] == want)}"
+        f"/{sum(r['should_trigger'] == want for r in rows)}"
+        for label, want in (("should-trigger", True), ("should-not", False)))
+    verdicts = Counter(r["verdict"] for r in rows)
+    if verdicts["inconclusive"]:
+        return "needs_review", f"{detail}, {verdicts['inconclusive']} inconclusive"
+    return ("fail" if verdicts["fail"] else "pass"), detail
+
+
+def grade_assertion(a, workdir, run_dir, case_dir, index=0):
     t = a["type"]
+    if t == "skill-triggering":
+        return grade_written_skill(os.path.join(run_dir, f"triggering-{index}"))
     changed_path = os.path.join(run_dir, "changed-files.txt")
     if t in ("file-exists", "file-contains", "file-not-contains"):
         full = inside(workdir, a["path"])
@@ -302,7 +345,7 @@ def cmd_grade(args):
                    "total": len(case["assertions"]), "pass_rate": None}
     else:
         for i, a in enumerate(case["assertions"]):
-            st, detail = grade_assertion(a, status["workdir"], run_dir, case_dir)
+            st, detail = grade_assertion(a, status["workdir"], run_dir, case_dir, i)
             results.append({"index": i, "type": a["type"], "description": a.get("description", ""),
                             "status": st, "detail": detail})
         c = Counter(r["status"] for r in results)
@@ -570,6 +613,56 @@ def cmd_set_description(args):
         f.write("\n".join(lines))
 
 
+def cmd_written_skill(args):
+    """Prints the one skill directory a run wrote under a glob in its work
+    tree, or why there is no usable one (exit 1)."""
+    workdir, pattern = args
+    safe_rel(pattern, "path")
+    root = os.path.realpath(workdir)
+    found = []
+    for md in glob.glob(os.path.join(root, pattern, "SKILL.md")):
+        d = os.path.dirname(md)
+        if os.path.isfile(md) and inside(root, os.path.relpath(d, root)):
+            found.append(d)
+    found.sort()
+    if len(found) != 1:
+        rels = ", ".join(os.path.relpath(d, root) for d in found)
+        print(f"expected one skill at {pattern}/SKILL.md, found {len(found)}" + (f": {rels}" if rels else ""))
+        sys.exit(1)
+    d = found[0]
+    try:
+        meta = skill_meta(os.path.join(d, "SKILL.md"))
+    except Invalid as e:
+        print(str(e).replace(root + os.sep, ""))
+        sys.exit(1)
+    name, base = meta["name"] or "", os.path.basename(d)
+    if len(name) > 64 or not SKILL_NAME_RE.match(name):
+        print(f"{os.path.relpath(d, root)}: name {name!r} is not a valid skill name")
+        sys.exit(1)
+    if name != base:
+        print(f"{os.path.relpath(d, root)}: name {name!r} does not match its directory {base!r}")
+        sys.exit(1)
+    print(d)
+
+
+def cmd_trigger_plan(args):
+    """Lists the skill-triggering assertions of one or more cases (a case
+    file, a list, or - for stdin) with the sessions each costs per run."""
+    case_dir, src = args
+    data = json.load(sys.stdin) if src == "-" else load_json(src)
+    out = []
+    for case in data if isinstance(data, list) else [data]:
+        for i, a in enumerate(case.get("assertions", [])):
+            if a.get("type") != "skill-triggering":
+                continue
+            qpath = os.path.join(os.path.realpath(case_dir), a["queries"])
+            runs = a.get("runs", WRITTEN_SKILL_RUNS)
+            out.append({"case": case["id"], "index": i, "path": a["path"], "queries": qpath,
+                        "runs": runs, "threshold": a.get("threshold", WRITTEN_SKILL_THRESHOLD),
+                        "sessions": len(load_queries(qpath, False)) * runs})
+    dump_json(out)
+
+
 # ------------------------------------------------------------ triggering ----
 
 def load_queries(path, manual_only, splits=None):
@@ -795,6 +888,7 @@ COMMANDS = {
     "skill-meta": cmd_skill_meta, "check-candidate": cmd_check_candidate,
     "set-description": cmd_set_description, "queries": cmd_queries,
     "triggering": cmd_triggering, "record-name": cmd_record_name, "scoreboard": cmd_scoreboard,
+    "written-skill": cmd_written_skill, "trigger-plan": cmd_trigger_plan,
 }
 
 

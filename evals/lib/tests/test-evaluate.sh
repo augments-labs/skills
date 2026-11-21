@@ -403,6 +403,57 @@ eq "a resumed follow-up session exits 0" 0 "$rc"
 eq "a resumed session sends its follow-ups" 3 "$(tl_launches)"
 jeq "a resumed follow-up session is scored" "$ws_fu/benchmark.json" '.run_summary.full.pass_rate' 1
 
+# --- a skill the run writes is scored on its triggering ---------------------
+wrepo="$(tl_make_repo write-repo)" || tl_done
+tl_use_fake "$wrepo"
+wcase="$wrepo/evals/engineering/demo-skill"
+printf '%s\n' '{"fixture": "app", "queries": [
+  {"query": "Rename the widget called oldWidget", "should_trigger": true, "split": "train"},
+  {"query": "Rename the gadget called oldGadget", "should_trigger": true, "split": "validation"},
+  {"query": "Write a haiku about rain", "should_trigger": false, "split": "train"}]}' > "$wcase/written-queries.json"
+jq '.evals += [{"id": "write-gadget-skill", "kind": "trap", "fixture": "app",
+  "prompt": "Write a skill for renaming a widget in this app.",
+  "assertions": [{"type": "skill-triggering", "path": ".agents/skills/*", "queries": "written-queries.json", "runs": 2}]}]' \
+  "$wcase/evals.json" > "$wcase/evals.json.tmp" && mv "$wcase/evals.json.tmp" "$wcase/evals.json"
+( cd "$wrepo" && tl_git add -A && tl_git commit -qm "a written-skill case" ) || not_ok "commit the written-skill case"
+EVALS_COST_PER_SESSION=1 "$EV" "${SK[@]}" --eval write-gadget-skill --arms full,none --runs 1 --dry-run > /dev/null 2> "$TL_TMP/dry.err"
+contains "a dry run counts the written skills' triggering sessions" "$TL_TMP/dry.err" "+ up to 12 triggering session(s) scoring the skills the runs write"
+contains "a dry run prices them" "$TL_TMP/dry.err" "estimated cost: 14.00"
+EVALS_COST_PER_SESSION=1 "$EV" "${SK[@]}" --eval rename-widget --runs 1 --dry-run > /dev/null 2> "$TL_TMP/dry.err"
+lacks "a plan without one counts none" "$TL_TMP/dry.err" "triggering session"
+: > "$FAKE_LAUNCH_LOG"
+evaluate --runs 1 --eval write-gadget-skill --arms full,none
+eq "a written-skill run exits 0" 0 "$rc"
+eq "each run's skill is scored on 3 queries x 2 runs" 14 "$(tl_launches)"
+eq "the triggering sessions are activations" 12 "$(grep -c '^launch kind=activation ' "$FAKE_LAUNCH_LOG")"
+jeq "the skill written with the skill loaded routes every query" "$bench" '[.run_summary.full.pass_rate, .run_summary.none.pass_rate]' '[1,0]'
+wr="$ws/runs/write-gadget-skill"
+jeq "full: the written skill triggers on both plain requests" "$wr/full/run-1/grading.json" '.assertion_results[0] | [.status, .detail]' \
+  '["pass","should-trigger 2/2, should-not 1/1"]'
+jeq "none: the narrow skill misses the gadget request" "$wr/none/run-1/grading.json" '.assertion_results[0] | [.status, .detail]' \
+  '["fail","should-trigger 1/2, should-not 1/1"]'
+jeq "the triggering record names the written skill" "$wr/full/run-1/triggering-0/triggering.json" '[.skill, .runs, .plugin.skill_tree, .harness]' \
+  '["gadget-helper",2,null,"fake"]'
+check "the triggering log is kept" test -s "$wr/full/run-1/triggering-0.log"
+check "the run's diff holds the written skill" grep -qF '.agents/skills/gadget-helper/SKILL.md' "$wr/full/run-1/diff.patch"
+mode skill-misnamed
+: > "$FAKE_LAUNCH_LOG"
+evaluate --runs 1 --eval write-gadget-skill --arms full
+eq "a misnamed skill runs no triggering session" 1 "$(tl_launches)"
+jeq "a misnamed skill fails" "$ws/runs/write-gadget-skill/full/run-1/grading.json" '.assertion_results[0] | [.status, .detail]' \
+  "[\"fail\",\".agents/skills/gadget-helper: name 'gadget-helpers' does not match its directory 'gadget-helper'\"]"
+mode refuse-activation
+evaluate --runs 1 --eval write-gadget-skill --arms full
+jeq "a refusal that leaves a query unscored makes the run resumable" "$ws/runs/write-gadget-skill/full/run-1/run_status.json" \
+  '[.outcome, .reason]' '["indeterminate","refusal"]'
+ws_ref="$ws"
+mode ""
+: > "$FAKE_LAUNCH_LOG"
+"$EV" --resume "$ws_ref" > /dev/null 2> "$TL_TMP/resume.err"
+eq "the resumed run reruns the session and its triggering" 7 "$(tl_launches)"
+jeq "the resumed run is scored" "$ws_ref/runs/write-gadget-skill/full/run-1/grading.json" '.summary.outcome' '"pass"'
+tl_use_fake "$repo"
+
 # --- edit mode: full vs the skill at --base ----------------------------------
 erepo="$(tl_make_repo edit-repo)" || tl_done
 tl_use_fake "$erepo"

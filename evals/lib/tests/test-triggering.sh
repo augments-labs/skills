@@ -139,6 +139,52 @@ jq '.queries[1].fixture = "../files/app"' "$TL_TMP/queries.orig.json" > "$qf"
 bad "a per-query fixture outside files/" 2 --dry-run
 cp "$TL_TMP/queries.orig.json" "$qf"
 
+# --- any skill folder on any queries file (--skill-dir, --queries) ----------
+# How evals/bin/evaluate scores a skill an agent wrote during a run.
+wq="$TL_TMP/written-queries"
+mkdir -p "$wq/files" "$TL_TMP/written/gadget-helper"
+cp -R "$repo/evals/engineering/demo-skill/files/app" "$wq/files/app"
+printf 'gadget\n' > "$wq/files/app/GADGET.md"
+printf '%s\n' '{"fixture": "app", "queries": [
+  {"query": "Rename the gadget called oldGadget", "should_trigger": true, "split": "train"},
+  {"query": "Write a haiku about rain", "should_trigger": false, "split": "validation"}]}' > "$wq/queries.json"
+printf -- '---\nname: gadget-helper\ndescription: "Use when renaming a gadget."\n---\n# Gadget helper\n' \
+  > "$TL_TMP/written/gadget-helper/SKILL.md"
+trig_dir() { # args...; sets $ws, $rec, and $rc (no --skill)
+  n=$((n + 1)); ws="$TL_TMP/ws/trig-$n"; rc=0
+  "$TR" --pack engineering --harness fake --out "$ws" "$@" > "$TL_TMP/trig.out" 2> "$TL_TMP/trig.err" || rc=$?
+  rec="$ws/triggering.json"
+}
+rm -f "$FAKE_STATE/seeded"
+trig_dir --skill-dir "$TL_TMP/written/gadget-helper" --queries "$wq/queries.json" --runs 1
+eq "a written skill that routes every query exits 0" 0 "$rc"
+jeq "the record names the written skill and binds no tree" "$rec" '[.skill, .plugin.skill_tree, .plugin.description_sha256]' \
+  "[\"gadget-helper\",null,\"$(sha "Use when renaming a gadget.")\"]"
+jeq "a load of the written skill is a trigger" "$ws/q0/run-1/result.json" '[.triggered, .skill_chain]' '[true,["gadget-helper"]]'
+eq "the bundle holds the written skill only" "./skills/gadget-helper/SKILL.md" "$(cd "$ws/bundle" && find . -type f)"
+eq "fixtures resolve next to the queries file" "GADGET.md,README.md,registry.txt,src" "$(awk -F '\t' '{ print $1 }' "$FAKE_STATE/seeded" | sort -u)"
+contains "the plan names the scored folder" "$TL_TMP/trig.err" "scoring the skill in $TL_TMP/written/gadget-helper"
+lacks "a written skill is not offered for recording" "$TL_TMP/trig.err" "record it with"
+trig_dir --skill-dir "$TL_TMP/written/gadget-helper" --queries "$wq/queries.json" --runs 1 --dry-run
+eq "a --skill-dir dry run exits 0" 0 "$rc"
+before="$(tl_launches)"
+bad_dir() { # $1 description, rest: args
+  local d="$1" got=0; shift
+  "$TR" --pack engineering --harness fake --runs 1 "$@" > /dev/null 2>&1 || got=$?
+  eq "$d exits 2" 2 "$got"
+}
+bad_dir "--skill-dir without --queries" --skill-dir "$TL_TMP/written/gadget-helper"
+bad_dir "--skill with --skill-dir" --skill demo-skill --skill-dir "$TL_TMP/written/gadget-helper" --queries "$wq/queries.json"
+bad_dir "a --skill-dir with no SKILL.md" --skill-dir "$TL_TMP/written" --queries "$wq/queries.json"
+bad_dir "a missing --queries file" --skill-dir "$TL_TMP/written/gadget-helper" --queries "$wq/nope.json"
+mkdir -p "$TL_TMP/written/bad"
+printf -- '---\nname: Bad_Name\ndescription: "Use when renaming a gadget."\n---\n' > "$TL_TMP/written/bad/SKILL.md"
+bad_dir "a written skill with an invalid name" --skill-dir "$TL_TMP/written/bad" --queries "$wq/queries.json"
+bad_dir "neither --skill nor --skill-dir" --queries "$wq/queries.json"
+eq "--skill-dir errors launch nothing" "$before" "$(tl_launches)"
+trig --runs 1 --splits train --queries "$wq/queries.json"
+jeq "--queries replaces the committed queries for a committed skill" "$ws/query-results.json" 'map(.query)' '["Rename the gadget called oldGadget"]'
+
 # --- manual-only skills -------------------------------------------------------
 skf="$repo/skills/in-progress/demo-skill/SKILL.md"
 qf="$repo/evals/engineering/demo-skill/queries.json"

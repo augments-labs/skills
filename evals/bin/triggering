@@ -15,6 +15,9 @@
 # lacks leaves the model nothing to act on but the skill, so it overstates loads.
 # A manual-only skill (disable-model-invocation: true) uses split "negative" only.
 #
+# --queries and --skill-dir score any skill folder on any queries file; that is
+# how evals/bin/evaluate scores a skill an agent wrote during a run.
+#
 # Every query is a live agent session. Run --dry-run first: it prints the count.
 set -uo pipefail
 export LC_ALL=C
@@ -26,6 +29,7 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 usage() {
   cat <<'EOF'
 Usage: evals/bin/triggering --pack PACK --skill NAME [options]
+       evals/bin/triggering --pack PACK --skill-dir DIR --queries FILE [options]
 
   --harness NAME          claude-code (default), codex, or antigravity
   --runs N                runs per query (default 3)
@@ -36,6 +40,10 @@ Usage: evals/bin/triggering --pack PACK --skill NAME [options]
   --max-turns N           turn cap per session (default 6)
   --description-file F    score this candidate description instead of the committed one
                           (its record has a null skill_tree and cannot be recorded)
+  --queries FILE          score these queries instead of evals/<pack>/<skill>/queries.json;
+                          fixtures resolve under files/ next to FILE
+  --skill-dir DIR         score the skill in DIR, named by its SKILL.md name, instead of
+                          --skill (needs --queries; not recordable)
   --model NAME            model passed to the harness
   --out DIR               workspace (default evals/workspaces/<stamp>-<pack>-<skill>-<harness>-triggering)
   --json                  print triggering.json instead of its path
@@ -48,7 +56,7 @@ EOF
 }
 
 pack="" skill="" harness=claude-code runs=3 splits="" threshold=0.5 jobs=3 timeout_s=120 maxturns=6
-desc_file="" model="" out="" print_json=0 allow_unverified=0 dry_run=0
+desc_file="" model="" out="" print_json=0 allow_unverified=0 dry_run=0 qfile_flag="" skill_dir=""
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --pack) pack="${2:-}"; shift 2 ;;
@@ -61,6 +69,8 @@ while [ "$#" -gt 0 ]; do
     --timeout) timeout_s="${2:-}"; shift 2 ;;
     --max-turns) maxturns="${2:-}"; shift 2 ;;
     --description-file) desc_file="${2:-}"; shift 2 ;;
+    --queries) qfile_flag="${2:-}"; shift 2 ;;
+    --skill-dir) skill_dir="${2:-}"; shift 2 ;;
     --model) model="${2:-}"; shift 2 ;;
     --out) out="${2:-}"; shift 2 ;;
     --json) print_json=1; shift ;;
@@ -72,7 +82,15 @@ while [ "$#" -gt 0 ]; do
 done
 fail2() { log "error: $*"; exit 2; }
 require_tool git python3 jq || exit 3
-[ -n "$pack" ] && [ -n "$skill" ] || { usage >&2; fail2 "--pack and --skill are required"; }
+[ -n "$pack" ] || { usage >&2; fail2 "--pack is required"; }
+if [ -n "$skill_dir" ]; then
+  [ -z "$skill" ] || fail2 "--skill and --skill-dir are exclusive"
+  [ -n "$qfile_flag" ] || fail2 "--skill-dir needs --queries"
+  [ -f "$skill_dir/SKILL.md" ] || fail2 "no SKILL.md in $skill_dir"
+  skill_dir="$(cd "$skill_dir" && pwd -P)"
+else
+  [ -n "$skill" ] || { usage >&2; fail2 "--skill or --skill-dir is required"; }
+fi
 for n in runs jobs timeout_s maxturns; do
   case "${!n}" in ''|0*|*[!0-9]*) fail2 "--${n%_s} must be a positive integer" ;; esac
 done
@@ -80,18 +98,28 @@ awk -v t="$threshold" 'BEGIN { exit !(t ~ /^0?\.[0-9]+$/ && t > 0 && t < 1) }' |
 threshold="$(awk -v t="$threshold" 'BEGIN { printf "%g", t }')"
 
 repo="$(repo_root)"
-case_dir="$repo/evals/$pack/$skill"
-qfile="$case_dir/queries.json"
-[ -f "$qfile" ] || fail2 "no queries at evals/$pack/$skill/queries.json"
-rel="$(skill_rel_dir "$repo" "$pack" "$skill")" || fail2 "no skill at skills/$pack/$skill/ or skills/in-progress/$skill/"
-meta="$(evalkit skill-meta "$repo/$rel/SKILL.md")" || exit 2
+if [ -n "$skill_dir" ]; then
+  src="$skill_dir"
+  meta="$(evalkit skill-meta "$src/SKILL.md")" || exit 2
+  skill="$(jq -r '.name // ""' <<< "$meta")"
+  case "$skill" in ''|-*|*-|*--*|*[!a-z0-9-]*) fail2 "$skill_dir: name '$skill' is not a valid skill name" ;; esac
+  [ "${#skill}" -le 64 ] || fail2 "$skill_dir: name '$skill' is longer than 64 characters"
+else
+  rel="$(skill_rel_dir "$repo" "$pack" "$skill")" || fail2 "no skill at skills/$pack/$skill/ or skills/in-progress/$skill/"
+  src="$repo/$rel"
+  meta="$(evalkit skill-meta "$src/SKILL.md")" || exit 2
+fi
+qfile="${qfile_flag:-$repo/evals/$pack/$skill/queries.json}"
+[ -f "$qfile" ] || fail2 "no queries at ${qfile_flag:-evals/$pack/$skill/queries.json}"
+qfile="$(cd "$(dirname "$qfile")" && pwd -P)/$(basename "$qfile")"
+files_dir="$(dirname "$qfile")/files"
 manual="$(jq -r 'if .manual_only then 1 else 0 end' <<< "$meta")"
 queries="$(evalkit queries "$qfile" "$manual" "$splits")" || exit 2
 [ "$(jq length <<< "$queries")" -gt 0 ] || fail2 "no queries in the selected splits"
 fixture="$(jq -r '.fixture // ""' "$qfile")"
 if [ -n "$fixture" ]; then
   case "$fixture" in /*|*..*) fail2 "queries.json fixture must be a directory name under files/" ;; esac
-  [ -d "$case_dir/files/$fixture" ] || fail2 "fixture directory not found: files/$fixture"
+  [ -d "$files_dir/$fixture" ] || fail2 "fixture directory not found: files/$fixture"
 fi
 if [ -n "$desc_file" ]; then
   candidate="$(evalkit check-candidate "$desc_file")" || fail2 "--description-file was rejected"
@@ -103,6 +131,7 @@ sessions=$((nq * runs))
 log "plan: triggering $pack/$skill on $harness (manual_only=$([ "$manual" = 1 ] && echo true || echo false)), $runs run(s) per query, threshold $threshold"
 [ "$runnable" = yes ] || log "  adapter: runnable=no ($runnable_reason)"
 [ -n "$desc_file" ] && log "  scoring a candidate description from $desc_file (not recordable)"
+[ -n "$skill_dir" ] && log "  scoring the skill in $skill_dir on $qfile (not recordable)"
 jq -r 'group_by(.split)[] | "  \(.[0].split): \(length) quer\(if length == 1 then "y" else "ies" end)"' <<< "$queries" >&2
 log "  $nq quer$([ "$nq" -eq 1 ] && echo y || echo ies) x $runs run(s) = $sessions agent session(s), $jobs at a time"
 log "  worst-case wall time: $(( (sessions + jobs - 1) / jobs * timeout_s / 60 )) min at --timeout $timeout_s"
@@ -131,14 +160,15 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT TERM
 
-# The bundle: the committed skill, or a copy carrying the candidate description.
-build_bundle "$repo/$rel" "$skill" "$ws/bundle" || exit 2
+# The bundle: the committed skill, a copy carrying the candidate description,
+# or the skill in --skill-dir.
+build_bundle "$src" "$skill" "$ws/bundle" || exit 2
 commit="$(git -C "$repo" rev-parse HEAD)" || exit 2
+tree=null
 if [ -n "$desc_file" ]; then
   printf '%s\n' "$candidate" > "$ws/description.txt"
   evalkit set-description "$ws/bundle/skills/$skill/SKILL.md" "$ws/description.txt" || exit 2
-  tree=null
-else
+elif [ -z "$skill_dir" ]; then
   tree="$(skill_tree "$repo" "$commit" "$rel")"
 fi
 sha="$(evalkit skill-meta "$ws/bundle/skills/$skill/SKILL.md" | jq -r .description_sha256)" || exit 2
@@ -159,7 +189,7 @@ probe() { # $1 query index $2 run number $3 query text $4 fixture (may be empty)
   local wd stream err pid rc=0 ran=0 chain triggered=0 valid=0 reason="" setup=""
   wd="$base/work"; stream="$rd/stream.ndjson"; err="$rd/stderr.log"
   mkdir -p "$rd" && : > "$stream" && : > "$err"
-  if ! seed_workdir "$wd" "${fx:+$case_dir/files/$fx}"; then
+  if ! seed_workdir "$wd" "${fx:+$files_dir/$fx}"; then
     reason=seed_failed
   else
     ( lab_session "$base" "$ws/bundle" activation "$wd" "$text" "$stream" "$err"; r=$?
@@ -217,7 +247,7 @@ jq -r '.[] | "  \(.verdict | ascii_upcase | .[0:12] | . + (" " * (12 - length)))
 jq -r '.splits | to_entries[] | "  \(.key): \(.value.passed)/\(.value.queries) passed, pass_rate=\(.value.pass_rate // "-"), inconclusive=\(.value.inconclusive)"' \
   "$ws/triggering.json" >&2
 log "workspace: $ws"
-[ -n "$desc_file" ] || log "record it with: evals/bin/report $ws"
+[ -n "$desc_file$skill_dir" ] || log "record it with: evals/bin/report $ws"
 if [ "$print_json" -eq 1 ]; then cat "$ws/triggering.json"; else printf '%s\n' "$ws/triggering.json"; fi
 jq -e 'all(.[]; .verdict == "pass")' "$ws/query-results.json" >/dev/null || exit 1
 exit 0
