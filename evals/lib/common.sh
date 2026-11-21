@@ -150,7 +150,8 @@ adapter_gate() { # $1 harness $2 allow-unverified (0/1)
 
 # Runs one agent session in a throwaway home: seeds credentials, installs the
 # bundle ("" for none), then calls the adapter. Sets setup_failed when the
-# home could not be prepared. Returns the session's exit status.
+# home could not be prepared. Returns the session's exit status. Stdin is
+# detached so a session never drains a caller's read loop.
 lab_session() { # $1 base dir $2 bundle $3 kind (behavioral|activation) $4 work dir $5 prompt (file for behavioral) $6 stream $7 stderr log
   local base="$1" bundle="$2" kind="$3" wd="$4" prompt="$5" stream="$6" err="$7" rc=0
   setup_failed=""
@@ -162,7 +163,7 @@ lab_session() { # $1 base dir $2 bundle $3 kind (behavioral|activation) $4 work 
     lab_seed_credentials "$harness" || { echo credential_seed_failed > "$base/setup-failed"; exit 90; }
     adapter_install "$bundle" >> "$err" 2>&1 || { echo install_failed > "$base/setup-failed"; exit 90; }
     "adapter_run_$kind" "$wd" "$prompt" "$stream"
-  ) || rc=$?
+  ) < /dev/null || rc=$?
   lab_home_cleanup "$base"
   if [ -f "$base/setup-failed" ]; then
     setup_failed="$(cat "$base/setup-failed")"; rm -f "$base/setup-failed"
