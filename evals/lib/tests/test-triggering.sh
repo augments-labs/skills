@@ -122,6 +122,23 @@ trig --runs 1 --jobs 2
 jeq "every query ran although sessions read stdin" "$ws/query-results.json" '[.[] | select(.valid_runs == 1)] | length' 6
 mode ""
 
+# --- a query's own fixture overrides the file-level one ----------------------
+qf="$repo/evals/engineering/demo-skill/queries.json"
+cp "$qf" "$TL_TMP/queries.orig.json"
+mkdir -p "$repo/evals/engineering/demo-skill/files/other"
+printf 'other\n' > "$repo/evals/engineering/demo-skill/files/other/OTHER.md"
+jq '.queries[1].fixture = "other"' "$TL_TMP/queries.orig.json" > "$qf"
+rm -f "$FAKE_STATE/seeded"
+trig --runs 1 --splits train
+seeded() { awk -F '\t' -v q="$1" '$2 == q { print $1 }' "$FAKE_STATE/seeded" | sort -u; }
+eq "a query with its own fixture is seeded with it" "OTHER.md" "$(seeded "Rename the gadget called oldGadget")"
+eq "other queries keep the file-level fixture" "README.md,registry.txt,src" "$(seeded "Rename the widget called oldWidget")"
+jq '.queries[1].fixture = "missing"' "$TL_TMP/queries.orig.json" > "$qf"
+bad "a per-query fixture that does not exist" 2 --dry-run
+jq '.queries[1].fixture = "../files/app"' "$TL_TMP/queries.orig.json" > "$qf"
+bad "a per-query fixture outside files/" 2 --dry-run
+cp "$TL_TMP/queries.orig.json" "$qf"
+
 # --- manual-only skills -------------------------------------------------------
 skf="$repo/skills/in-progress/demo-skill/SKILL.md"
 qf="$repo/evals/engineering/demo-skill/queries.json"
