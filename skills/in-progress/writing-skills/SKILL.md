@@ -1,6 +1,6 @@
 ---
 name: writing-skills
-description: "Use when creating, editing, trimming, or fixing an agent skill (a SKILL.md and its folder), including one that never loads or triggers, or when turning a runbook or a repo's recurring failures into a project skill. Skip when only using a skill, and for skills that are not agent skills."
+description: "Use when creating, editing, or repairing an agent skill (a SKILL.md and its folder): writing or checking its frontmatter or description, adding, moving, or merging its sections, adding a reference, script, or asset file and linking it, trimming it, fixing one that never loads or triggers, or turning a runbook or a repo's recurring failures into a project skill. A skill about migrations, deploys, or rollbacks is still a skill to edit, not that task to do. Skip when only following a skill or doing the task it describes, and for docs that are not agent skills, such as a README or a plain runbook."
 ---
 
 # Writing skills
