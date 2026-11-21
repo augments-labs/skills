@@ -1,6 +1,6 @@
 {
   "name": "augments-labs-skills",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Eval-backed Agent Skills and deterministic hooks for coding agents, organized into domain packs.",
   "type": "module",
   "main": "index.js",
