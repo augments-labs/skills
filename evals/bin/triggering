@@ -9,7 +9,10 @@
 #
 # Queries live in evals/<pack>/<skill>/queries.json:
 #   {"fixture": "<dir under files/>" (optional),
-#    "queries": [{"query", "should_trigger", "split": "train"|"validation"|"holdout"|"negative"}]}
+#    "queries": [{"query", "should_trigger", "split": "train"|"validation"|"holdout"|"negative",
+#                 "fixture" (optional, overrides the file-level one)}]}
+# Seed each query with the files it names: a request about files the work tree
+# lacks leaves the model nothing to act on but the skill, so it overstates loads.
 # A manual-only skill (disable-model-invocation: true) uses split "negative" only.
 #
 # Every query is a live agent session. Run --dry-run first: it prints the count.
@@ -151,12 +154,12 @@ jq -n --arg pack "$pack" --arg skill "$skill" --argjson manual "$manual" --arg h
 
 # One activation session. Stops the session as soon as the skill loads: a
 # trigger needs no more evidence, and the rest of the session is cost.
-probe() { # $1 query index $2 run number $3 query text
-  local qi="$1" k="$2" text="$3" rd="$ws/q$1/run-$2" base="$run_base/q$1/run-$2"
+probe() { # $1 query index $2 run number $3 query text $4 fixture (may be empty)
+  local qi="$1" k="$2" text="$3" fx="$4" rd="$ws/q$1/run-$2" base="$run_base/q$1/run-$2"
   local wd stream err pid rc=0 ran=0 chain triggered=0 valid=0 reason="" setup=""
   wd="$base/work"; stream="$rd/stream.ndjson"; err="$rd/stderr.log"
   mkdir -p "$rd" && : > "$stream" && : > "$err"
-  if ! seed_workdir "$wd" "${fixture:+$case_dir/files/$fixture}"; then
+  if ! seed_workdir "$wd" "${fx:+$case_dir/files/$fx}"; then
     reason=seed_failed
   else
     ( lab_session "$base" "$ws/bundle" activation "$wd" "$text" "$stream" "$err"; r=$?
@@ -199,8 +202,9 @@ probe() { # $1 query index $2 run number $3 query text
 launched=0
 while IFS= read -r q; do
   qi="$(jq -r .index <<< "$q")"; text="$(jq -r .query <<< "$q")"
+  qfx="$(jq -r --arg d "$fixture" '.fixture // $d' <<< "$q")"
   for k in $(seq 1 "$runs"); do
-    probe "$qi" "$k" "$text" &
+    probe "$qi" "$k" "$text" "$qfx" &
     launched=$((launched + 1))
     [ $((launched % jobs)) -eq 0 ] && wait
   done

@@ -118,8 +118,11 @@ A bundle holds `SKILL.md` and the skill's `scripts/`, `references/`, and `assets
 ```json
 {"fixture": "app", "queries": [
   {"query": "Rename the widget called oldWidget", "should_trigger": true, "split": "train"},
-  {"query": "What time is it in Tokyo", "should_trigger": false, "split": "validation"}]}
+  {"query": "What time is it in Tokyo", "should_trigger": false, "split": "validation"},
+  {"query": "The billing tests fail since the refactor", "should_trigger": true, "split": "train", "fixture": "billing"}]}
 ```
+
+A query's `fixture` overrides the file-level one. Seed each query with the files it names: a request about files the work tree lacks leaves the model nothing to do but load the skill, which overstates the trigger rate.
 
 ```
 {schema_version: 1, pack, skill, manual_only, harness, harness_version, model,

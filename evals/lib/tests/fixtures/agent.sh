@@ -58,6 +58,8 @@ echo "MODEL fake-model-1"
 echo "TURN"
 
 if [ "$kind" = activation ]; then
+  # What the work tree was seeded with, for the per-query fixture test.
+  [ -n "$state" ] && printf '%s\t%s\n' "$(ls "$wd" | LC_ALL=C sort | paste -sd, -)" "$prompt" >> "$state/seeded"
   # Routing: load the skill when a word of 5+ letters from the request
   # appears in its description.
   desc=""

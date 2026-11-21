@@ -580,8 +580,15 @@ def load_queries(path, manual_only, splits=None):
             raise Invalid(f"{where}: negative-split queries must have should_trigger false")
         if manual_only and q["split"] != "negative":
             raise Invalid(f"{where}: a manual-only skill uses split 'negative' only")
-        out.append({"index": i, "query": q["query"], "should_trigger": q["should_trigger"],
-                    "split": q["split"]})
+        item = {"index": i, "query": q["query"], "should_trigger": q["should_trigger"],
+                "split": q["split"]}
+        if "fixture" in q:
+            safe_rel(q["fixture"], f"{where}.fixture")
+            files = os.path.join(os.path.dirname(os.path.abspath(path)), "files")
+            if not os.path.isdir(os.path.join(files, q["fixture"])):
+                raise Invalid(f"{where}: fixture directory not found: files/{q['fixture']}")
+            item["fixture"] = q["fixture"]
+        out.append(item)
     if not manual_only:
         present = {q["split"] for q in out}
         for need in ("train", "validation"):
