@@ -15,7 +15,7 @@ evals/
     files/<fixture>/    fixture trees the cases start from
     queries.json        triggering queries
     distilled/SKILL.md  the distilled arm (optional)
-  results/<date>-<pack>-<skill>-<harness>[-triggering]/
+  results/<date>-<pack>-<skill>-<harness>[-<model>][-triggering]/
     benchmark.json | triggering.json      (committed records, nothing else)
   workspaces/   raw runs (gitignored; never commit)
 ```
@@ -45,7 +45,7 @@ evals/bin/report WORKSPACE|RECORD.json [--date YYYY-MM-DD]
 evals/bin/report --scoreboard [--check]
 ```
 
-`EVALS_COST_PER_SESSION` (a number) prices the plan of a `--dry-run`. `report` copies only the record into `evals/results/`. It refuses to overwrite an existing target, to record a `skill_tree` of `null` (an uncommitted skill or a candidate description), and to record a run with hooks enabled. Recording a benchmark rewrites the README table between `<!-- eval-scoreboard:start -->` and `<!-- eval-scoreboard:end -->`. `--check` exits 1 if that table has drifted from the records.
+`EVALS_COST_PER_SESSION` (a number) prices the plan of a `--dry-run`. `report` copies only the record into `evals/results/`. It refuses to overwrite an existing target, to record a `skill_tree` of `null` (an uncommitted skill or a candidate description), and to record a run with hooks enabled. The record's directory name ends with its model ID, lowercased with other characters turned into dashes, so records for several models can share a date. Recording a benchmark rewrites the README table between `<!-- eval-scoreboard:start -->` and `<!-- eval-scoreboard:end -->`. The table shows the latest record for each skill and model. `--check` exits 1 if that table has drifted from the records.
 
 ## Arms
 

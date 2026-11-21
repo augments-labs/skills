@@ -698,7 +698,15 @@ def cmd_record_name(args):
     date = (args[1] if len(args) > 1 and args[1] else stamp[:10])
     if not re.match(r"^\d{4}-\d{2}-\d{2}$", date):
         raise Invalid(f"bad date {date!r}")
-    print(f"{date}-{rec['pack']}-{rec['skill']}-{rec['harness']}{suffix}")
+    model = model_slug(rec.get("model"))
+    print(f"{date}-{rec['pack']}-{rec['skill']}-{rec['harness']}{'-' + model if model else ''}{suffix}")
+
+
+def model_slug(model):
+    """A record name's model part: the model id lowercased, other characters as single dashes."""
+    if not isinstance(model, str):
+        return ""
+    return re.sub(r"[^a-z0-9]+", "-", model.lower()).strip("-")
 
 
 def pct(x):
@@ -724,7 +732,7 @@ def scoreboard_rows(results_dir):
     for path in sorted(glob.glob(os.path.join(results_dir, "*", "benchmark.json"))):
         try:
             rec = load_json(path)
-            key = (rec["pack"], rec["skill"])
+            key = (rec["pack"], rec["skill"], str(rec.get("model") or ""))
             order = (rec.get("measured_at", ""), os.path.basename(os.path.dirname(path)))
         except (OSError, ValueError, KeyError, TypeError):
             continue
