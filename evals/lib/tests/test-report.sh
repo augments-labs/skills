@@ -63,6 +63,19 @@ report "$ws1" --date 2026-01-02
 eq "an existing target is refused" 1 "$rc"
 contains "the refusal says records are immutable" "$TL_TMP/report.err" "already recorded"
 
+# A different record with the same name takes the next free suffix; the same
+# record again is still refused. Its earlier measured_at keeps the row on ws1.
+mkdir -p "$TL_TMP/mod/rerun"
+jq '.measured_at = "2000-01-01T00:00:00Z"' "$ws1/benchmark.json" > "$TL_TMP/mod/rerun/benchmark.json"
+report "$TL_TMP/mod/rerun/benchmark.json" --date 2026-01-02
+eq "a second record with the same name exits 0" 0 "$rc"
+eq "it takes the -2 suffix" "$target-2/benchmark.json" "$(cat "$TL_TMP/report.out")"
+check "the suffixed record is copied verbatim" cmp -s "$TL_TMP/mod/rerun/benchmark.json" "$target-2/benchmark.json"
+contains "the scoreboard still links the latest record" "$readme" "$row"
+report "$TL_TMP/mod/rerun/benchmark.json" --date 2026-01-02
+eq "recording it again is refused" 1 "$rc"
+contains "the refusal names the suffixed record" "$TL_TMP/report.err" "already recorded: evals/results/2026-01-02-engineering-demo-skill-fake-fake-model-1-2"
+
 # Drift: a hand-edited row fails --check until --scoreboard rewrites it.
 sed 's/100% vs 0%/90% vs 0%/' "$readme" > "$readme.tmp" && mv "$readme.tmp" "$readme"
 report --scoreboard --check
