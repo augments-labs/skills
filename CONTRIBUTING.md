@@ -111,11 +111,18 @@ excluded from all generated plugin bundles under `plugins/`.
 
 ## Multi-harness adapters
 
-Pack-capable harnesses install from generated self-contained per-pack bundles
-under `plugins/<plugin>/` (with root marketplace manifests for Claude Code and
-Codex). Harnesses whose native installer only reads the repository root
-(OpenCode, Kimi Code, Hermes) load `engineering-skills` by default until those
-harnesses support subpath or multi-pack plugin installation.
+Every harness installs from a generated, self-contained per-pack bundle under
+`plugins/<plugin>/`, which carries one manifest per harness. Marketplace
+harnesses (Claude Code, Codex, Grok Build, Muse Code) find the bundles through
+root marketplace manifests. Installs of the repository root itself (pi, Kimi
+Code, OpenCode, a Grok install of the repository) load the root pack,
+`root_pack` in `scripts/sync-plugins.sh` (`engineering`), through root entry
+points: `package.json` (`pi.skills`) and `index.js` are hand-written and
+checked by the sync, while `.kimi-plugin/plugin.json` and
+`.grok-plugin/{plugin,marketplace}.json` are generated. Every other pack
+installs from its own bundle. A new pack needs a `pack_meta` case in
+`scripts/sync-plugins.sh` and an entry in both `.claude-plugin/marketplace.json`
+and `.agents/plugins/marketplace.json`.
 
 Because tool names, `stdin` schemas, and deny protocols differ across harnesses
 (for example, `Bash`/`Edit`/`Write` with `exit 2` vs `apply_patch` vs
@@ -128,20 +135,22 @@ hook schema.
 | Claude Code | `.claude-plugin/marketplace.json` -> `plugins/<plugin>/` | Strict `marketplace.json` owner schema (`name`, optional `email`, no `url`); discovers `skills/` and `hooks/hooks.json` at the plugin root; `PreToolUse`/`PostToolUse` hooks |
 | Codex CLI | `.agents/plugins/marketplace.json` -> `plugins/<plugin>/` | Manifest names component paths (`skills`, `hooks` -> `hooks/codex-hooks.json`); installs into `$CODEX_HOME/plugins/cache/`; edits use `apply_patch` |
 | Antigravity | `plugins/<plugin>/.antigravity-plugin/plugin.json` | Reads components from the plugin root only: hooks from root `hooks.json` (one named entry per hook; commands run in the plugin folder, and older builds do not set `${PLUGIN_ROOT}`), never `.antigravity-plugin/rules/` or `hooks/hooks.json`; check with `agy plugin validate --json` |
-| Cursor | `plugins/<plugin>/` (cloned/copied locally) | Rejects symlinks outside `~/.cursor/plugins/local/`; auto-loads any `rules/` at plugin root |
-| Devin | `plugins/<plugin>/.devin-plugin/plugin.json` | No `skills` field in manifest; no `AGENTS.md` at plugin root; hooks fail open; tool names `exec`/`edit`/`write` |
-| OpenCode (1.x/2.x) | Root `index.js` + `package.json` -> plugin JS | Single module supports 1.x named exports + 2.x `default.setup(ctx)` + `default.id`; zero npm deps |
-| pi | Per-pack `plugins/<plugin>/package.json` (`pi` key) | Keeps `pi install .../plugins/<plugin>` pack-isolated |
-| Grok Build | `plugins/<plugin>/` + `$GROK_HOME/rules/` | Tool events support `additionalContext`; `SessionStart` discarded on 1.0.40 |
-| Kimi Code | `.kimi-plugin/plugin.json` | No compaction event; subagents need full file paths |
-| Hermes | `.hermes-plugin/` | No root `plugin.yaml`/`plugin.json`; system-prompt sections `<= 4k` each, `<= 8k` total; user answers "no" to root `package.json` Node-dep prompt |
+| Cursor | `plugins/<plugin>/.cursor-plugin/plugin.json` | Installed by copying the bundle into `~/.cursor/plugins/local/<plugin>/` (links pointing outside it are rejected); without a `hooks` field it would load `hooks/hooks.json`, so the manifest sets `"hooks": {}`; auto-loads any `rules/` at the plugin root; every CLI command, including the smoke driver's, needs a signed-in account |
+| Devin | `plugins/<plugin>/.devin-plugin/plugin.json` | Finds `skills/` by convention; loads `hooks/hooks.json` and root `hooks.json` with its own tool names (`exec`/`edit`/`write`), so the hook adapter allows every call when `DEVIN_PROJECT_DIR` is set; loads `AGENTS.md` and `rules/` at the plugin root as rules (`validate.sh` rejects them); `plugins install` needs a signed-in account |
+| OpenCode (1.x/2.x) | Root `index.js` -> `plugins/<plugin>/index.js` (from `scripts/templates/opencode-index.js`) | 2.x installs Git or npm specifiers only (`plugin add git+https://...`), reads the default export's `id`, and calls `setup(ctx)`; 1.x calls every exported function as a plugin factory; zero npm deps; `opencode plugin list` leaves a background server running |
+| pi | Root `package.json` (`pi.skills` names the root pack's bundle) | Any other pack installs from its bundle path, where pi finds `skills/` by convention |
+| Grok Build | `.grok-plugin/marketplace.json` -> `plugins/<plugin>/.grok-plugin/plugin.json` | Without a `hooks` field it would load `hooks/hooks.json`, so the manifest sets `"hooks": []`; root `.grok-plugin/plugin.json` keeps an install of the repository to the root pack's skills |
+| Kimi Code | Root `.kimi-plugin/plugin.json`, or `plugins/<plugin>/.kimi-plugin/plugin.json` | `/plugins install <path-or-zip-url>`, also served by `kimi web`'s API; the manifest lists only `skills`, so no hooks load |
+| Hermes | `plugins/<plugin>/plugin.yaml` + `__init__.py` (from `scripts/templates/hermes-init.py`) | Installs a repository subdirectory (`owner/repo/plugins/<plugin>`) and refuses the repository root as dangerous; its install scan rates the bundled hook scripts `caution` (they name `sudo`), which the user confirms |
 | `npx skills add` | `plugins/<plugin>/skills/<name>/SKILL.md` (flat) | Skills only, no hooks; the smoke driver pins the CLI version and disables its telemetry |
-| Muse Code | `.muse-plugin/plugin.json` + `scripts/install-muse-skills.sh` | 1.3.0 installs individual skills via CLI (`--pack engineering`) |
+| Muse Code | `.claude-plugin/marketplace.json` -> `plugins/<plugin>/.muse-plugin/plugin.json` | The manifest lists each skill under `capabilities.skills` and no hooks; Muse warns that the bundle carries several harness manifests and uses `.muse-plugin/` |
 
 `scripts/sync-plugins.sh` maps `hooks/<pack>/config/{claude-code,codex,antigravity}.json`
 to the path each harness reads (`hooks/hooks.json`, `hooks/codex-hooks.json`,
-root `hooks.json`), ships the rest of `hooks/<pack>/` except `tests/`, and
-copies promoted skills flat into `skills/<name>/`.
+root `hooks.json`), ships the rest of `hooks/<pack>/` except `tests/`,
+copies promoted skills flat into `skills/<name>/`, and writes the other
+harness manifests. Hooks run only in Claude Code, Codex, and Antigravity; the
+other manifests keep the hook files out or, on Devin, the adapter stands aside.
 
 ## Hooks (`hooks/<pack>/`)
 
@@ -192,7 +201,10 @@ add/update `tests/harnesses/<name>.sh`, run
 `tests/run-plugin-smoke.sh --harness <name>`, and update user docs under `docs/`.
 The smoke test installs into an isolated home with no model call; with no
 promoted skill yet it installs a temporary copy carrying one sample skill.
-CI skips it because it needs each harness CLI.
+CI skips it because it needs each harness CLI. Drivers never copy credentials
+or touch your real harness home, so a harness that needs a signed-in account
+to load plugins (Cursor, Devin) fails with its own sign-in error; the Cursor
+driver passes `CURSOR_API_KEY` through only when you export it.
 
 ## Opening a pull request
 
