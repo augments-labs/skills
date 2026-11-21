@@ -116,6 +116,12 @@ else
   ok "# skip early stop: pgrep is not available"
 fi
 
+# --- a session that reads stdin does not starve the query loop ---------------
+mode drain
+trig --runs 1 --jobs 2
+jeq "every query ran although sessions read stdin" "$ws/query-results.json" '[.[] | select(.valid_runs == 1)] | length' 6
+mode ""
+
 # --- manual-only skills -------------------------------------------------------
 skf="$repo/skills/in-progress/demo-skill/SKILL.md"
 qf="$repo/evals/engineering/demo-skill/queries.json"

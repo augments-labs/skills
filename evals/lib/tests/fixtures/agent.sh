@@ -14,6 +14,7 @@
 #   none-loads  report a skill load even with no bundle installed
 #   sprawl      with a bundle, write an unrequested file on the typo task
 #   parallel    briefly hold an active slot and record concurrency counts
+#   drain       read stdin to EOF first, as an agent CLI in print mode does
 # Every launch appends what it saw to $FAKE_STATE/launches.
 kind="$1" wd="$2" prompt="$3" bundle="$4"
 state="${FAKE_STATE:-}"
@@ -33,6 +34,7 @@ if [ -n "$state" ]; then
 fi
 
 case "$mode" in
+  drain) cat > /dev/null ;;
   dead) exit 0 ;;
   refuse) echo "error: usage limit reached for this account" >&2; exit 1 ;;
   crash) echo "TURN"; exit 3 ;;
