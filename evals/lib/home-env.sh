@@ -14,6 +14,7 @@ lab_home_env() { # $1 base directory for this run (created when missing)
   chmod 0700 "$home" "$base/run" || return 127
   printf 'LAB_RUN_BASE=%q\n' "$base"
   printf 'EVALS_OPERATOR_HOME=%q\n' "${EVALS_OPERATOR_HOME:-${HOME:-}}"
+  printf 'EVALS_OPERATOR_DBUS=%q\n' "${EVALS_OPERATOR_DBUS:-${DBUS_SESSION_BUS_ADDRESS:-}}"
   printf 'HOME=%q\n' "$home"
   printf 'XDG_CONFIG_HOME=%q\n' "$home/.config"
   printf 'XDG_DATA_HOME=%q\n' "$home/.local/share"

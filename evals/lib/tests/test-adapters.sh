@@ -23,7 +23,7 @@ for h in "${HARNESSES[@]}"; do
 done
 eq "claude-code is runnable" yes "$(with_adapter claude-code eval 'echo $runnable')"
 eq "codex is marked unverified" no "$(with_adapter codex eval 'echo $runnable')"
-eq "antigravity is marked unverified" no "$(with_adapter antigravity eval 'echo $runnable')"
+eq "antigravity is runnable" yes "$(with_adapter antigravity eval 'echo $runnable')"
 check "an unverified adapter states why" test -n "$(with_adapter codex eval 'echo $runnable_reason')"
 check "only the three adapters ship" test "$(cd "$TL_EVALS/harnesses" && ls | paste -sd' ')" = "antigravity.sh claude-code.sh codex.sh"
 refute "an unknown harness does not load" q with_adapter nope true
@@ -43,6 +43,26 @@ eq "codex: a SKILL.md read is a load, deduped; tokens summed over turns" "demo-s
 eq "codex: no skill load" "|y|4|1|1|" "$(with_adapter codex _parse "$STREAMS/codex-negative.ndjson")"
 eq "antigravity: named and file-read loads, unique DONE tool steps" "demo-skill|y|20|2|1|fixture-model-2" "$(with_adapter antigravity _parse "$STREAMS/antigravity.ndjson")"
 eq "antigravity: no skill load" "|y||1|1|" "$(with_adapter antigravity _parse "$STREAMS/antigravity-negative.ndjson")"
+# Live agy 1.5+ stream shape: step_type="tool", tool_info.parameters.Path,
+# multi-step agent_response turns, and ERROR result with num_turns=0.
+cat > "$TL_TMP/agy-v15.ndjson" <<'EOF'
+{"event":"init","conversation_id":"c1","init":{"cwd":"/tmp/work","tools":["read_file","edit_file"]}}
+{"event":"step_update","step_update":{"conversation_id":"c1","step_index":0,"state":"DONE","step_type":"user_input"}}
+{"event":"step_update","step_update":{"conversation_id":"c1","step_index":1,"state":"DONE","step_type":"agent_response","usage":{"output_tokens":100}}}
+{"event":"step_update","step_update":{"conversation_id":"c1","step_index":2,"state":"ACTIVE","step_type":"tool","tool_name":"read_file","tool_info":{"name":"read_file","parameters":{"Path":"/tmp/home/.gemini/config/plugins/eval-bundle/skills/demo-skill/SKILL.md"}}}}
+{"event":"step_update","step_update":{"conversation_id":"c1","step_index":2,"state":"DONE","step_type":"tool","tool_name":"read_file","tool_info":{"name":"read_file","parameters":{"Path":"/tmp/home/.gemini/config/plugins/eval-bundle/skills/demo-skill/SKILL.md"}}}}
+{"event":"step_update","step_update":{"conversation_id":"c1","step_index":3,"state":"DONE","step_type":"tool","tool_name":"edit_file","tool_info":{"name":"edit_file","parameters":{"Path":"/tmp/work/app.txt"}}}}
+{"event":"step_update","step_update":{"conversation_id":"c1","step_index":4,"state":"DONE","step_type":"agent_response","text_delta":"done","usage":{"output_tokens":50}}}
+{"event":"result","result":{"conversation_id":"c1","status":"SUCCESS","response":"done","num_turns":1,"usage":{"output_tokens":150}}}
+EOF
+eq "antigravity: agy 1.5+ tool/Path skill load, tool calls, and model turns" \
+  "demo-skill|y|150|2|2|" "$(with_adapter antigravity _parse "$TL_TMP/agy-v15.ndjson")"
+cat > "$TL_TMP/agy-auth-err.ndjson" <<'EOF'
+{"event":"result","result":{"conversation_id":"","status":"ERROR","response":"","error":"authentication failed or timed out","num_turns":0,"usage":{"output_tokens":0}}}
+EOF
+refute "antigravity: ERROR result with 0 turns is not a model turn" with_adapter antigravity adapter_ran "$TL_TMP/agy-auth-err.ndjson"
+check "antigravity: authentication error is detected as a refusal" \
+  with_adapter antigravity lab_refusal "$TL_TMP/agy-auth-err.ndjson" /dev/null
 : > "$TL_TMP/empty.ndjson"
 printf 'not json\n{"type":"assistant"\n' > "$TL_TMP/garbage.ndjson"
 for h in "${HARNESSES[@]}"; do
@@ -66,12 +86,14 @@ bin="$TL_TMP/bin"
 mkdir -p "$bin"
 for c in claude codex agy; do ln -s "$TL_FIX/harnesses/fake-cli.sh" "$bin/$c"; done
 op="$EVALS_OPERATOR_HOME"
-mkdir -p "$op/.claude" "$op/.codex"
+mkdir -p "$op/.claude" "$op/.codex" "$op/.gemini/antigravity-cli"
 printf '{"token": "operator-claude"}\n' > "$op/.claude/.credentials.json"
 printf '{"hooks": {"Stop": [{"command": "rm -rf /"}]}}\n' > "$op/.claude/settings.json"
 printf 'operator instructions\n' > "$op/.claude/CLAUDE.md"
 printf '{"token": "operator-codex"}\n' > "$op/.codex/auth.json"
 printf 'notify = ["rm", "-rf", "/"]\n' > "$op/.codex/config.toml"
+printf '{"token": "operator-gemini"}\n' > "$op/.gemini/oauth_creds.json"
+printf '{"hooks": {"PreToolUse": []}}\n' > "$op/.gemini/antigravity-cli/settings.json"
 cp "$op/.claude/settings.json" "$TL_TMP/settings.orig"
 bundle="$TL_TMP/bundle"
 mkdir -p "$bundle"
@@ -84,7 +106,7 @@ eq "build_bundle copies SKILL.md and support dirs only" "skills/demo-skill/SKILL
 _session() { # $1 base $2 bundle ("" for none) $3 kind
   local base="$1" b="$2" kind="$3" wd="$1/work"
   eval "$(lab_home_env "$base")" || exit 1
-  export LAB_RUN_BASE EVALS_OPERATOR_HOME HOME XDG_CONFIG_HOME XDG_DATA_HOME XDG_CACHE_HOME XDG_RUNTIME_DIR TMPDIR
+  export LAB_RUN_BASE EVALS_OPERATOR_HOME EVALS_OPERATOR_DBUS HOME XDG_CONFIG_HOME XDG_DATA_HOME XDG_CACHE_HOME XDG_RUNTIME_DIR TMPDIR
   errlog="$base/stderr.log"; timeout_s=30; maxturns=4
   lab_seed_credentials "$harness" || exit 1
   adapter_install "$b" || exit 1
@@ -155,17 +177,30 @@ check "codex: the none arm installs no skills" test ! -e "$shome/.codex/skills"
 eq "codex: activation is read-only" read-only "$(argv_after codex -s)"
 
 # antigravity
-session antigravity agy-full "$bundle" behavioral
+EVALS_OPERATOR_DBUS="unix:path=/run/user/1000/bus" session antigravity agy-full "$bundle" behavioral
 eq "antigravity: a session exits 0" 0 "$src"
 eq "antigravity: the bundle is installed as a plugin" "plugin install $shome/.eval-plugin/eval-bundle" "$(awk 'NR <= 3' "$bin/agy.argv" | paste -sd' ')"
 check "antigravity: the plugin has a manifest" test -f "$shome/.eval-plugin/eval-bundle/.antigravity-plugin/plugin.json"
 check "antigravity: the plugin carries no hooks" test -z "$(find "$shome/.eval-plugin" -name 'hooks*')"
+check "antigravity: operator oauth_creds is copied when unseeded" test -f "$shome/.gemini/oauth_creds.json"
+eq "antigravity: copied oauth_creds is private" 600 "$(stat -c %a "$shome/.gemini/oauth_creds.json" 2>/dev/null || stat -f %Lp "$shome/.gemini/oauth_creds.json")"
+check "antigravity: operator settings.json is never copied" test ! -e "$shome/.gemini/antigravity-cli/settings.json"
+contains "antigravity: unseeded subscription forwards operator keyring bus" "$bin/agy.env" "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus"
 eq "antigravity: the prompt is passed" "--print=Rename the widget." "$(grep -- '^--print=' "$bin/agy.argv")"
 eq "antigravity: edits are accepted" accept-edits "$(argv_after agy --mode)"
 lacks "antigravity: the operator environment is cleared" "$bin/agy.env" "EVALS_TEST_SECRET"
 session antigravity agy-none "" activation
 lacks "antigravity: the none arm installs nothing" "$bin/agy.argv" "plugin"
 eq "antigravity: activation plans only" plan "$(argv_after agy --mode)"
+
+# Seeded API key for antigravity overrides operator subscription auth and keeps D-Bus blocked.
+mkdir -p "$EVALS_CREDENTIAL_SEED/antigravity"
+printf 'GEMINI_API_KEY=seeded-gemini-key\n' > "$EVALS_CREDENTIAL_SEED/antigravity/.eval-env"
+EVALS_OPERATOR_DBUS="unix:path=/run/user/1000/bus" session antigravity agy-seeded "$bundle" behavioral
+check "antigravity: seeded API key skips operator oauth_creds" test ! -e "$shome/.gemini/oauth_creds.json"
+contains "antigravity: seeded API key keeps session bus blocked" "$bin/agy.env" "DBUS_SESSION_BUS_ADDRESS=unix:path=$sbase/run/no-session-bus"
+contains "antigravity: seeded API key reaches child env" "$bin/agy.env" "GEMINI_API_KEY=seeded-gemini-key"
+rm -rf "$EVALS_CREDENTIAL_SEED/antigravity"
 
 # The credential seed is copied into the home, private.
 mkdir -p "$EVALS_CREDENTIAL_SEED/codex/.codex"
@@ -189,8 +224,9 @@ eq "the version comes from the CLI" "claude 0.0.0-fake" "$(PATH="$bin:$PATH" wit
 _gate() { adapter_gate "$harness" "$1"; }
 gate_rc() { local r=0; PATH="$1" with_adapter "$2" _gate "$3" > /dev/null 2>&1 || r=$?; echo "$r"; }
 eq "a runnable adapter passes the gate" 0 "$(gate_rc "$bin:$PATH" claude-code 0)"
+eq "antigravity passes the gate without --allow-unverified" 0 "$(gate_rc "$bin:$PATH" antigravity 0)"
 eq "an unverified adapter is gated (exit 2)" 2 "$(gate_rc "$bin:$PATH" codex 0)"
-eq "--allow-unverified opens the gate" 0 "$(gate_rc "$bin:$PATH" antigravity 1)"
+eq "--allow-unverified opens the gate" 0 "$(gate_rc "$bin:$PATH" codex 1)"
 mkdir -p "$TL_TMP/nocli" && ln -sf "$(command -v dirname)" "$TL_TMP/nocli/dirname"
 eq "a missing CLI is exit 3" 3 "$(gate_rc "$TL_TMP/nocli" claude-code 0)"
 
