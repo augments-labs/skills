@@ -1,0 +1,6 @@
+Customer   Orders         Net
+acme            3      320.00
+globex          1    1,500.00
+initech         2      100.00
+umbrella        2      700.00
+TOTAL           8    2,620.00
