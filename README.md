@@ -58,7 +58,7 @@ Skills live under `skills/<pack>/` and ship as self-contained plugin bundles und
 
 | Pack | Plugin address | Status | Focus |
 | --- | --- | --- | --- |
-| **Engineering** (`skills/engineering/`) | `engineering-skills@augments-labs` | Pre-1.0 (`0.1.0`) | Eval-backed engineering constraints, verification, debugging, production-safety, and project-local checks |
+| **Engineering** (`skills/engineering/`) | `engineering-skills@augments-labs` | Pre-1.0 (`0.1.1`) | Eval-backed engineering constraints, verification, debugging, production-safety, and project-local checks |
 | **Staging** (`skills/in-progress/`) | *(not bundled)* | Experimental | Candidate skills undergoing 3-arm and triggering evaluation before promotion |
 | **Retired** (`skills/deprecated/`) | *(not bundled)* | Archived | Skills retired once frontier models close the gap |
 
@@ -92,7 +92,7 @@ Every promoted skill body under `skills/engineering/` is capped at 200 lines, 2,
 
 ## Installation
 
-> **Pre-1.0 notice (`0.1.0`):** The `engineering-skills` plugin ships three evaluated skills (`debugging`, `test-driven-development`, `writing-skills`) and two hooks (`guard-destructive-git`, `guard-protected-branch`). More skills ship as they pass evaluation, and pre-1.0 releases may change the pack's surface.
+> **Pre-1.0 notice (`0.1.1`):** The `engineering-skills` plugin ships three evaluated skills (`debugging`, `test-driven-development`, `writing-skills`) and two hooks (`guard-destructive-git`, `guard-protected-branch`). More skills ship as they pass evaluation, and pre-1.0 releases may change the pack's surface.
 
 ### Claude Code
 
