@@ -1,0 +1,5 @@
+{
+  "Languages": ["Python", "Go", "TypeScript", "SQL"],
+  "DevOps": ["Docker", "Terraform", "CI/CD"],
+  "Data": ["Pandas", "Spark", "dbt"]
+}
