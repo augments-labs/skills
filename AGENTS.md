@@ -36,8 +36,8 @@ for generated plugin bundles (`engineering-skills`, future `roblox-skills`):
 - `docs/`: user documentation in plain second person. Contributor and
   maintainer internals go in `CONTRIBUTING.md`.
 
-Edit `AGENTS.md`, never `CLAUDE.md` or `GEMINI.md` (`GEMINI.md` is a symlink to
-`AGENTS.md`).
+Edit `AGENTS.md`, never `CLAUDE.md` or `GEMINI.md` (`CLAUDE.md` and `GEMINI.md`
+are symlinks to `AGENTS.md`).
 
 ## Branching and releases
 

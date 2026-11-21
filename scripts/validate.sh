@@ -29,11 +29,13 @@ warn() {
   fi
 }
 
-# 1. Verify required root files exist (including GEMINI.md symlink/file).
-for f in README.md AGENTS.md CLAUDE.md CONTRIBUTING.md RELEASING.md CHANGELOG.md CODE_OF_CONDUCT.md SECURITY.md package.json index.js .claude-plugin/marketplace.json .agents/plugins/marketplace.json; do
+# 1. Verify required root files exist (including CLAUDE.md and GEMINI.md symlinks/files).
+for f in README.md AGENTS.md CONTRIBUTING.md RELEASING.md CHANGELOG.md CODE_OF_CONDUCT.md SECURITY.md package.json index.js .claude-plugin/marketplace.json .agents/plugins/marketplace.json; do
   [ -f "$f" ] || fail "missing required file: $f"
 done
-[ -e GEMINI.md ] || fail "missing required file/symlink: GEMINI.md"
+for f in CLAUDE.md GEMINI.md; do
+  [ -e "$f" ] || fail "missing required file/symlink: $f"
+done
 
 # 2. Verify JSON syntax (uses python3 or node when present).
 check_json_file() {
