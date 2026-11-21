@@ -233,6 +233,96 @@ check "SIGTERM stopped workers promptly (${sig_took}s)" test "$sig_took" -lt 10
 eq "SIGTERM removed every isolated home and run dir" "" "$(ls -A "$TMPDIR")"
 mode ""
 
+# --- interleaved launch order (run -> arm -> case) ----------------------------
+: > "$FAKE_LAUNCH_LOG"; rm -rf "$FAKE_STATE/launches"
+evaluate --runs 2 --arms full,none
+eq "interleaved run exits 0" 0 "$rc"
+first_three="$(awk -F'/' '{ print $(NF-3) "/" $(NF-2) "/" $(NF-1) }' <(sed -n 's/.* wd=\([^ ]*\) .*/\1/p' "$FAKE_STATE/launches" | head -n 3) | paste -sd' ')"
+eq "launches interleave cases before repeating a case" \
+  "rename-widget/full/run-1 fix-readme-typo/full/run-1 change-greeting/full/run-1" "$first_three"
+
+# --- resume (--resume) --------------------------------------------------------
+resume_eval() { # args...; sets $rc
+  rc=0
+  "$EV" "$@" > "$TL_TMP/resume.out" 2> "$TL_TMP/resume.err" || rc=$?
+}
+bad_resume() {
+  local d="$1"; shift
+  if "$EV" "$@" > /dev/null 2>&1; then not_ok "refuses $d"; else ok "refuses $d"; fi
+}
+bad_resume "--resume combined with --pack" --resume "$ws_sig" --pack engineering
+bad_resume "--resume combined with --runs" --resume "$ws_sig" --runs 1
+bad_resume "--resume on a missing dir" --resume "$TL_TMP/no-such-ws"
+mkdir -p "$TL_TMP/empty-ws"
+bad_resume "--resume on a dir without plan.json" --resume "$TL_TMP/empty-ws"
+
+# Resume the SIGTERM-interrupted workspace: all 3 interrupted slots run and score.
+: > "$FAKE_LAUNCH_LOG"; rm -rf "$FAKE_STATE/launches"
+EVALS_COST_PER_SESSION=0.5 resume_eval --resume "$ws_sig" --jobs 2 --dry-run
+eq "--resume --dry-run exits 0" 0 "$rc"
+eq "--resume --dry-run launches nothing" 0 "$(tl_launches)"
+contains "--resume --dry-run reports missing slots" "$TL_TMP/resume.err" "3 of 3 session(s) to run (0 complete, 3 missing, 0 refusal), 2 at a time"
+contains "--resume --dry-run prices only pending sessions" "$TL_TMP/resume.err" "estimated cost: 1.50"
+resume_eval --resume "$ws_sig" --jobs 2
+eq "--resume after SIGTERM exits 0" 0 "$rc"
+eq "--resume after SIGTERM prints benchmark path" "$ws_sig/benchmark.json" "$(cat "$TL_TMP/resume.out")"
+eq "--resume after SIGTERM ran the 3 interrupted sessions" 3 "$(tl_launches)"
+jeq "--resume after SIGTERM produces valid trap pass rates" "$ws_sig/benchmark.json" \
+  '[.run_summary.full.pass_rate, .run_summary.distilled.pass_rate, .run_summary.none.pass_rate]' '[1,1,0]'
+eq "--resume after SIGTERM removed all run directories" "" "$(ls -A "$TMPDIR")"
+
+# Resume after refusal: re-runs refusal slots only, leaving completed slots untouched.
+mode refuse
+evaluate --runs 1 --eval rename-widget,fix-readme-typo --arms full,none
+ws_ref="$ws"
+jeq "refusal run records indeterminate counts" "$ws_ref/benchmark.json" '[.run_summary.full.indeterminate_count, .run_summary.none.indeterminate_count]' '[2,2]'
+: > "$FAKE_LAUNCH_LOG"; rm -rf "$FAKE_STATE/launches"
+mode ""
+resume_eval --resume "$ws_ref" --dry-run
+contains "--resume --dry-run counts refusal slots" "$TL_TMP/resume.err" "4 of 4 session(s) to run (0 complete, 0 missing, 4 refusal)"
+resume_eval --resume "$ws_ref" --jobs 2
+eq "--resume after refusal exits 0" 0 "$rc"
+eq "--resume after refusal re-ran all 4 refusal sessions" 4 "$(tl_launches)"
+jeq "--resume after refusal clears indeterminate counts" "$ws_ref/benchmark.json" '[.run_summary.full.indeterminate_count, .run_summary.none.indeterminate_count]' '[0,0]'
+jeq "--resume after refusal scores traps properly" "$ws_ref/benchmark.json" '[.run_summary.full.pass_rate, .run_summary.none.pass_rate]' '[1,0]'
+
+# Resume never cherry-picks: completed pass/fail and non-refusal timeout runs are skipped.
+mode sleep
+evaluate --runs 1 --eval rename-widget --arms full,none --timeout 1
+ws_to="$ws"
+: > "$FAKE_LAUNCH_LOG"; rm -rf "$FAKE_STATE/launches"
+mode ""
+resume_eval --resume "$ws_to" --dry-run
+contains "--resume treats timeout as complete (not retried)" "$TL_TMP/resume.err" "0 of 2 session(s) to run (2 complete, 0 missing, 0 refusal)"
+resume_eval --resume "$ws_to"
+eq "--resume with 0 pending exits 0" 0 "$rc"
+eq "--resume with 0 pending launches nothing" 0 "$(tl_launches)"
+jeq "--resume preserves timeout indeterminate counts" "$ws_to/benchmark.json" '[.run_summary.full.indeterminate_count, .run_summary.none.indeterminate_count]' '[1,1]'
+
+# Partial workspace: keeps completed pass/fail untouched, re-runs only missing & corrupt slots.
+evaluate --runs 2 --eval rename-widget --arms full,none
+ws_part="$ws"
+printf 'keep\n' > "$ws_part/runs/rename-widget/full/run-1/sentinel.txt"
+printf 'keep\n' > "$ws_part/runs/rename-widget/none/run-1/sentinel.txt"
+rm -rf "$ws_part/runs/rename-widget/full/run-2"
+printf '{broken' > "$ws_part/runs/rename-widget/none/run-2/grading.json"
+: > "$FAKE_LAUNCH_LOG"; rm -rf "$FAKE_STATE/launches"
+resume_eval --resume "$ws_part" --jobs 2
+eq "--resume partial workspace exits 0" 0 "$rc"
+eq "--resume partial workspace ran only the 2 incomplete slots" 2 "$(tl_launches)"
+check "--resume preserved completed passing slot" test -f "$ws_part/runs/rename-widget/full/run-1/sentinel.txt"
+check "--resume preserved completed failing slot" test -f "$ws_part/runs/rename-widget/none/run-1/sentinel.txt"
+jeq "--resume partial workspace restored full counts" "$ws_part/benchmark.json" '[.run_summary.full.scored_runs, .run_summary.full.pass_rate, .run_summary.none.scored_runs, .run_summary.none.pass_rate]' '[2,1,2,0]'
+
+# Refuses to resume when the committed skill tree has changed.
+: > "$FAKE_LAUNCH_LOG"
+printf '\nChanged after initial run.\n' >> "$repo/skills/in-progress/demo-skill/SKILL.md"
+resume_eval --resume "$ws_part"
+check "--resume refuses a modified skill tree" test "$rc" -ne 0
+contains "--resume explains the skill tree mismatch" "$TL_TMP/resume.err" "skill tree changed"
+eq "--resume mismatch launches nothing" 0 "$(tl_launches)"
+git -C "$repo" checkout -q -- skills/in-progress/demo-skill/SKILL.md
+
 # --- edit mode: full vs the skill at --base ----------------------------------
 erepo="$(tl_make_repo edit-repo)" || tl_done
 tl_use_fake "$erepo"
