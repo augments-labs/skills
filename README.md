@@ -19,7 +19,7 @@ Canonical skills live under `skills/<pack>/` and build into self-contained plugi
 
 | Pack | Plugin address | Status | Focus |
 | --- | --- | --- | --- |
-| **Engineering** (`skills/engineering/`) | `engineering-skills@augments-labs` | Pre-1.0 (`0.1.1`) | Eval-backed debugging, TDD, skill authoring, and git guardrail hooks |
+| **Engineering** (`skills/engineering/`) | `engineering-skills@augments-labs` | Pre-1.0 (`0.1.2`) | Eval-backed debugging, TDD, skill authoring, and git guardrail hooks |
 
 ## Context cost and measured evidence
 
@@ -43,7 +43,7 @@ Every promoted skill body under `skills/engineering/` is capped at 200 lines, 2,
 
 ## Installation
 
-> **Pre-1.0 notice (`0.1.1`):** `engineering-skills` ships three evaluated skills (`debugging`, `test-driven-development`, `writing-skills`) and two hooks (`guard-destructive-git`, `guard-protected-branch`).
+> **Pre-1.0 notice (`0.1.2`):** `engineering-skills` ships three evaluated skills (`debugging`, `test-driven-development`, `writing-skills`) and two hooks (`guard-destructive-git`, `guard-protected-branch`).
 
 ### Claude Code
 
