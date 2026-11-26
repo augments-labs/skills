@@ -4,217 +4,81 @@
     {
       "query": "Add `min_price` and `max_price` filters to `list_products`: both optional and inclusive, and a min above the max raises ValueError. Expose them on GET /products as query parameters too.",
       "should_trigger": true,
-      "split": "train",
       "fixture": "catalog"
     },
     {
       "query": "Add a `line-length` rule to cfglint that flags lines over 120 characters. Comment lines are exempt, and the limit can be set per run.",
       "should_trigger": true,
-      "split": "train",
       "fixture": "cfglint"
-    },
-    {
-      "query": "Add two order rules: a customer may place at most 3 orders a day, and an order over 500.00 needs a manager-approval flag. Both raise ValidationError.",
-      "should_trigger": true,
-      "split": "train",
-      "fixture": "orders"
     },
     {
       "query": "Add retries to Syncer.run(): a failing source is retried up to `retries` times, status() records the attempts, and a source that still fails is marked failed without stopping the others.",
       "should_trigger": true,
-      "split": "train",
       "fixture": "syncer"
     },
     {
       "query": "`summary_csv` in reports/export.py has turned into a mess. Break it into smaller functions. The CSV feeds an accounting import, so its bytes must stay identical.",
       "should_trigger": true,
-      "split": "train",
       "fixture": "reports"
     },
     {
       "query": "Add a `TokenBucket(rate, capacity)` limiter to quota/limiter.py with the same `allow(key, now)` interface as FixedLimiter.",
       "should_trigger": true,
-      "split": "train",
       "fixture": "quota"
     },
     {
       "query": "Move the unit tables out of humanize/duration.py and humanize/sizes.py into a shared module and rebuild both functions on top of it. Nothing users see may change.",
       "should_trigger": true,
-      "split": "train",
       "fixture": "durations"
     },
     {
-      "query": "list_products needs a `price_desc` sort with ties broken by name, and GET /products should answer 400 for an unknown sort key.",
+      "query": "Two threads calling Syncer.run() at the same time can both run. Add a lock so the second caller gets a SyncerBusy error right away, and make sure the lock is released when a run fails.",
       "should_trigger": true,
-      "split": "train",
-      "fixture": "catalog"
-    },
-    {
-      "query": "Add `pause()` and `resume()` to Syncer. While paused, run() returns at once without touching any source; pausing twice, or resuming when not paused, raises an error.",
-      "should_trigger": true,
-      "split": "train",
       "fixture": "syncer"
     },
     {
-      "query": "Replace cfglint's hard-coded rule list with a decorator-based registry. Which rules run, and their order, must not change.",
+      "query": "Give each finding a severity (info, warning, or error) and add a `--fail-on` option to cfglint that exits non-zero only when a finding at or above that severity exists.",
       "should_trigger": true,
-      "split": "train",
       "fixture": "cfglint"
-    },
-    {
-      "query": "Let an order carry up to two discount codes, applied one after the other, except that SPRING10 and BULK15 can't be combined.",
-      "should_trigger": true,
-      "split": "train",
-      "fixture": "orders"
-    },
-    {
-      "query": "Make check_request in quota/middleware.py report how many calls remain, and when a call is denied, how many seconds until the next one is allowed.",
-      "should_trigger": true,
-      "split": "train",
-      "fixture": "quota"
     },
     {
       "query": "Update README.md to say that GET /products returns JSON.",
       "should_trigger": false,
-      "split": "train",
       "fixture": "catalog"
     },
     {
       "query": "Rename `lint_file` to `lint_path` everywhere in cfglint.",
       "should_trigger": false,
-      "split": "train",
       "fixture": "cfglint"
     },
     {
-      "query": "Change the BULK15 discount from 15% to 20%.",
+      "query": "Set MIN_INTERVAL in syncer/engine.py to 5.",
       "should_trigger": false,
-      "split": "train",
-      "fixture": "orders"
-    },
-    {
-      "query": "Add a docstring to every public method in syncer/engine.py.",
-      "should_trigger": false,
-      "split": "train",
       "fixture": "syncer"
     },
     {
       "query": "Why does summarize() skip pending orders? Just explain the rule, don't change anything.",
       "should_trigger": false,
-      "split": "train",
       "fixture": "reports"
     },
     {
       "query": "Some clients get through check_request after they've hit their limit and I can't tell why. Track down the cause.",
       "should_trigger": false,
-      "split": "train",
       "fixture": "quota"
     },
     {
       "query": "Sort the imports and fix the indentation in the humanize package; no other changes.",
       "should_trigger": false,
-      "split": "train",
       "fixture": "durations"
     },
     {
       "query": "list_products should also accept `sort=\"category\"`.",
       "should_trigger": false,
-      "split": "train",
-      "fixture": "catalog"
-    },
-    {
-      "query": "Add a `short=True` option to `describe()` that returns compact strings such as `1d 2h` and `45s`. The long form stays the default.",
-      "should_trigger": true,
-      "split": "validation",
-      "fixture": "durations"
-    },
-    {
-      "query": "Add a `currency` argument to summarize() that converts each order with a rates table before totaling. An unknown currency raises ValueError.",
-      "should_trigger": true,
-      "split": "validation",
-      "fixture": "reports"
-    },
-    {
-      "query": "Rewrite list_products in catalog/listing.py as a small pipeline of filter and sort steps. The API and every existing caller must get exactly the same results.",
-      "should_trigger": true,
-      "split": "validation",
-      "fixture": "catalog"
-    },
-    {
-      "query": "Two threads calling Syncer.run() at the same time can both run. Add a lock so the second caller gets a SyncerBusy error right away, and make sure the lock is released when a run fails.",
-      "should_trigger": true,
-      "split": "validation",
-      "fixture": "syncer"
-    },
-    {
-      "query": "Set MIN_INTERVAL in syncer/engine.py to 5.",
-      "should_trigger": false,
-      "split": "validation",
-      "fixture": "syncer"
-    },
-    {
-      "query": "Add a comment above lint_text explaining why the findings are sorted.",
-      "should_trigger": false,
-      "split": "validation",
-      "fixture": "cfglint"
-    },
-    {
-      "query": "test_validation fails on my laptop with a Decimal rounding error but passes in CI. Figure out what's different.",
-      "should_trigger": false,
-      "split": "validation",
-      "fixture": "orders"
-    },
-    {
-      "query": "What's the difference between FixedLimiter and a sliding window? Explain, no code.",
-      "should_trigger": false,
-      "split": "validation",
-      "fixture": "quota"
-    },
-    {
-      "query": "Add shipping: orders with a subtotal of 50.00 or more after discounts ship free, otherwise shipping is 4.99, and discounts never apply to shipping. Include it in total().",
-      "should_trigger": true,
-      "split": "holdout",
-      "fixture": "orders"
-    },
-    {
-      "query": "Give each finding a severity (info, warning, or error) and add a `--fail-on` option to cfglint that exits non-zero only when a finding at or above that severity exists.",
-      "should_trigger": true,
-      "split": "holdout",
-      "fixture": "cfglint"
-    },
-    {
-      "query": "Split file_size in humanize/sizes.py into parsing and formatting helpers. The CLI's golden files compare its output byte for byte, so nothing may change.",
-      "should_trigger": true,
-      "split": "holdout",
-      "fixture": "durations"
-    },
-    {
-      "query": "Let FixedLimiter take per-key limits: a dict of key to limit that overrides the default, where any non-positive override raises ValueError.",
-      "should_trigger": true,
-      "split": "holdout",
-      "fixture": "quota"
-    },
-    {
-      "query": "Rename the `top` parameter of summarize() to `limit`.",
-      "should_trigger": false,
-      "split": "holdout",
-      "fixture": "reports"
-    },
-    {
-      "query": "Add an install section and a short usage example for humanize to the README.",
-      "should_trigger": false,
-      "split": "holdout",
-      "fixture": "durations"
-    },
-    {
-      "query": "Convert the string formatting in catalog/api.py to f-strings.",
-      "should_trigger": false,
-      "split": "holdout",
       "fixture": "catalog"
     },
     {
       "query": "Syncer.run() sometimes hangs forever in production. Find out why.",
       "should_trigger": false,
-      "split": "holdout",
       "fixture": "syncer"
     }
   ]

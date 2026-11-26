@@ -19,19 +19,14 @@ from datetime import datetime, timezone
 KINDS = ("trap", "non_trigger", "small_fix")
 ASSERTION_TYPES = ("file-exists", "file-contains", "file-not-contains",
                    "command-succeeds", "git-count", "script", "skill-triggering")
-ARMS = ("full", "distilled", "none", "old_skill", "pack")
-SPLITS = ("train", "validation", "holdout", "negative")
+ARMS = ("full", "none", "old_skill", "pack")
+SPLITS = ("all", "train", "validation", "holdout", "negative")
 ID_RE = re.compile(r"^[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?$")
 SKILL_NAME_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 # skill-triggering defaults: runs per query and the trigger-rate threshold.
 WRITTEN_SKILL_RUNS = 3
 WRITTEN_SKILL_THRESHOLD = 0.5
 
-# Decision table (evals/README.md): distilled ships when it beats none by at
-# least this much, passes both control gates, and full adds less than
-# FULL_OVER_DISTILLED over it.
-DISTILLED_MIN_LIFT = 0.20
-FULL_OVER_DISTILLED = 0.10
 # Control gates, each measured against the none arm.
 NON_TRIGGER_EXTRA_TOOL_CALLS = 1
 SMALL_FIX_EXTRA_TOOL_CALLS = 2
@@ -41,12 +36,10 @@ SMALL_FIX_OUTPUT_TOKEN_RATIO = 1.5
 SCOREBOARD_START = "<!-- eval-scoreboard:start -->"
 SCOREBOARD_END = "<!-- eval-scoreboard:end -->"
 SCOREBOARD_HEADER = [
-    "| Skill | Arm shipped | Pass rate (`shipped` vs `none`) | Control delta (non-trigger / small fix) "
-    "| Token delta | Model & date | Record |",
-    "| --- | --- | --- | --- | --- | --- | --- |",
+    "| Skill | Pass rate (`skill` vs `none`) | Controls | Triggering | Updated | Record |",
+    "| --- | --- | --- | --- | --- | --- |",
 ]
-SCOREBOARD_PENDING = ("| *(Pending first evaluated promotion for `v0.0.1`)* "
-                      "| n/a | n/a | n/a | n/a | n/a | n/a |")
+SCOREBOARD_PENDING = "| *(No evaluated skills yet)* | n/a | n/a | n/a | n/a | n/a |"
 DASH = "n/a"
 
 
@@ -477,38 +470,18 @@ def delta(summary, a, b):
     return None if x is None or y is None else round(x - y, 4)
 
 
-def decide(plan, summary, deltas):
-    notes = []
-    if plan["mode"] == "composite":
-        return "pack", ["composite pack check: not a promotion record"]
-    if plan.get("shipped_arm_flag"):
-        return plan["shipped_arm_flag"], [f"shipped_arm set by flag: {plan['shipped_arm_flag']}"]
-    if plan["mode"] == "edit" or "distilled" not in summary:
-        return "full", ["full (no distilled arm measured)"]
-    dvn, fvd = deltas.get("distilled_vs_none"), deltas.get("full_vs_distilled")
-    fails = control_failures(summary["distilled"], summary.get("none"))
-    if dvn is None or dvn < DISTILLED_MIN_LIFT:
-        notes.append(f"distilled lift over none {dvn} < {DISTILLED_MIN_LIFT}")
-    notes += [f"distilled control gate: {w}" for w in fails]
-    if fvd is not None and fvd >= FULL_OVER_DISTILLED:
-        notes.append(f"full adds {fvd} >= {FULL_OVER_DISTILLED} over distilled")
-    if notes:
-        return "full", notes
-    return "distilled", ["distilled beats none, passes the controls, and full adds < 0.10"]
-
-
 def cmd_benchmark(args):
     ws = args[0]
     plan = load_json(os.path.join(ws, "plan.json"))
     runs = collect_runs(ws, plan)
     summary = {arm: summarize_arm(plan["cases"], runs[arm]) for arm in plan["arm_order"]}
     deltas = {}
-    for key, a, b in (("full_vs_none", "full", "none"), ("distilled_vs_none", "distilled", "none"),
-                      ("full_vs_distilled", "full", "distilled"), ("full_vs_old_skill", "full", "old_skill"),
+    for key, a, b in (("full_vs_none", "full", "none"), ("full_vs_old_skill", "full", "old_skill"),
                       ("pack_vs_full", "pack", "full"), ("pack_vs_none", "pack", "none")):
         if a in summary and b in summary:
             deltas[key] = delta(summary, a, b)
-    shipped, notes = decide(plan, summary, deltas)
+    shipped = "pack" if plan["mode"] == "composite" else "full"
+    notes = ["composite pack check: not a promotion record"] if plan["mode"] == "composite" else []
     models = Counter(r["metrics"].get("model") for arm in runs.values() for rs in arm.values()
                      for r in rs if r["metrics"].get("model"))
     model = models.most_common(1)[0][0] if models else (plan.get("model_flag") or "unknown")
@@ -693,14 +666,16 @@ def load_queries(path, manual_only, splits=None):
             raise Invalid(f"{where}: needs a non-empty 'query'")
         if not isinstance(q.get("should_trigger"), bool):
             raise Invalid(f"{where}: 'should_trigger' must be true or false")
-        if q.get("split") not in SPLITS:
+        default_split = "negative" if manual_only else "all"
+        split = q.get("split", default_split)
+        if split not in SPLITS:
             raise Invalid(f"{where}: 'split' must be one of {', '.join(SPLITS)}")
-        if q["split"] == "negative" and q["should_trigger"]:
+        if split == "negative" and q["should_trigger"]:
             raise Invalid(f"{where}: negative-split queries must have should_trigger false")
-        if manual_only and q["split"] != "negative":
-            raise Invalid(f"{where}: a manual-only skill uses split 'negative' only")
+        if manual_only and (split != "negative" or q["should_trigger"]):
+            raise Invalid(f"{where}: a manual-only skill uses split 'negative' with should_trigger false")
         item = {"index": i, "query": q["query"], "should_trigger": q["should_trigger"],
-                "split": q["split"]}
+                "split": split}
         if "fixture" in q:
             safe_rel(q["fixture"], f"{where}.fixture")
             files = os.path.join(os.path.dirname(os.path.abspath(path)), "files")
@@ -708,11 +683,6 @@ def load_queries(path, manual_only, splits=None):
                 raise Invalid(f"{where}: fixture directory not found: files/{q['fixture']}")
             item["fixture"] = q["fixture"]
         out.append(item)
-    if not manual_only:
-        present = {q["split"] for q in out}
-        for need in ("train", "validation"):
-            if need not in present:
-                raise Invalid(f"an auto-triggered skill needs '{need}' queries")
     if splits:
         out = [q for q in out if q["split"] in splits]
     return out
@@ -728,10 +698,14 @@ def cmd_triggering(args):
     ws = args[0]
     plan = load_json(os.path.join(ws, "plan.json"))
     thr = plan["threshold"]
+    target = plan["skill"]
+    with_skills = plan.get("with_skills") or []
     per_query, splits = [], {}
     models = Counter()
+    all_others = Counter()
     for q in plan["queries"]:
-        valid = triggered = 0
+        valid = triggered = other_runs = 0
+        q_others = Counter()
         for rf in sorted(glob.glob(os.path.join(ws, f"q{q['index']}", "run-*", "result.json"))):
             r = load_json(rf)
             if r.get("model"):
@@ -739,14 +713,26 @@ def cmd_triggering(args):
             if r.get("valid"):
                 valid += 1
                 triggered += 1 if r.get("triggered") else 0
+                others = [s for s in (r.get("skill_chain") or []) if isinstance(s, str) and s != target]
+                if others:
+                    other_runs += 1
+                    for s in set(others):
+                        q_others[s] += 1
+                        all_others[s] += 1
         rt = round(triggered / valid, 4) if valid else None
+        other_rt = round(other_runs / valid, 4) if valid else None
         if rt is None:
             verdict = "inconclusive"
+        elif with_skills and other_rt >= thr:
+            verdict = "fail"
         elif q["should_trigger"]:
             verdict = "pass" if rt > thr else "fail"
         else:
             verdict = "pass" if rt < thr else "fail"
-        per_query.append(dict(q, valid_runs=valid, triggered_runs=triggered, rate=rt, verdict=verdict))
+        row = dict(q, valid_runs=valid, triggered_runs=triggered, rate=rt, verdict=verdict)
+        if with_skills:
+            row["other_skills"] = dict(sorted(q_others.items()))
+        per_query.append(row)
         s = splits.setdefault(q["split"], {"queries": 0, "passed": 0, "failed": 0, "inconclusive": 0})
         s["queries"] += 1
         s[{"pass": "passed", "fail": "failed", "inconclusive": "inconclusive"}[verdict]] += 1
@@ -758,21 +744,27 @@ def cmd_triggering(args):
                                 "pass_rate": rate(s["passed"], s["passed"] + s["failed"]),
                                 "inconclusive": s["inconclusive"]}
     record = {
-        "schema_version": 1, "pack": plan["pack"], "skill": plan["skill"],
+        "schema_version": 1, "pack": plan["pack"], "skill": target,
         "manual_only": plan["manual_only"], "harness": plan["harness"],
         "harness_version": plan.get("harness_version") or "unknown",
         "model": models.most_common(1)[0][0] if models else (plan.get("model_flag") or "unknown"),
         "plugin": plan["plugin"], "runs": plan["runs"], "threshold": thr, "splits": out_splits,
     }
+    if with_skills:
+        record["with_skills"] = with_skills
+        record["other_skills_loaded"] = dict(sorted(all_others.items()))
     dump_json(record, os.path.join(ws, "triggering.json"))
     dump_json(per_query, os.path.join(ws, "query-results.json"))
 
 
 # ---------------------------------------------------------------- report ----
 
-def cmd_record_name(args):
-    """Validates a record for evals/results/ and prints its directory name."""
-    path = args[0]
+def cmd_record(args):
+    """Validates a workspace benchmark.json or triggering.json and merges a
+    compact summary into <results_dir>/<pack>/<skill>.json (overwriting older
+    skill trees in place)."""
+    path, results_dir = args[0], args[1]
+    date_arg = args[2] if len(args) > 2 else ""
     base = os.path.basename(path)
     if base not in ("benchmark.json", "triggering.json"):
         raise Invalid("a record is benchmark.json or triggering.json")
@@ -784,54 +776,114 @@ def cmd_record_name(args):
     for k in ("pack", "skill", "harness"):
         if not isinstance(rec.get(k), str) or not re.match(r"^[a-z0-9][a-z0-9-]*$", rec[k]):
             raise Invalid(f"'{k}' must be kebab-case")
+
+    pack, skill, harness = rec["pack"], rec["skill"], rec["harness"]
+    model = str(rec.get("model") or "unknown")
+
     if base == "benchmark.json":
         if rec.get("mode") == "composite":
             raise Invalid("a composite pack check is not a promotion record; keep it in its workspace")
         if rec.get("hooks_enabled") is not False:
             raise Invalid("hooks_enabled must be false")
-        for arm, ident in rec.get("arms", {}).items():
+        arms = rec.get("arms") or {}
+        for arm, ident in arms.items():
             if arm != "none" and (not ident or not ident.get("skill_tree") or ident["skill_tree"] == "null"):
                 raise Invalid(f"arms.{arm}.skill_tree is null: commit the skill and re-run")
-        if rec.get("shipped_arm") not in rec.get("arms", {}):
+        shipped = rec.get("shipped_arm")
+        if shipped not in arms:
             raise Invalid("shipped_arm was not measured")
-        stamp, suffix = rec["measured_at"], ""
-    elif base == "triggering.json":
+        tree = arms[shipped]["skill_tree"]
+        stamp = rec["measured_at"]
+        summary = rec.get("run_summary") or {}
+        evals = rec.get("evals") or []
+        s, n = summary.get(shipped, {}), summary.get("none")
+        min_case_runs = min((e["arms"][a]["scored_runs"] for e in evals for a in arms), default=0)
+        indeterminate = max(sum(e["arms"][a]["indeterminate"] for e in evals for a in arms),
+                            sum(summary[a]["indeterminate_count"] for a in arms))
+        needs_review = max(sum(e["arms"][a]["needs_review"] for e in evals for a in arms),
+                           sum(summary[a]["needs_review_count"] for a in arms))
+        payload_key = "benchmark"
+        payload = {
+            "shipped_arm": shipped,
+            "pass_rate": s.get("pass_rate"),
+            "none_pass_rate": n.get("pass_rate") if n else None,
+            "scored_runs": s.get("scored_runs", 0),
+            "min_case_runs": min_case_runs,
+            "indeterminate": indeterminate,
+            "needs_review": needs_review,
+            "controls_passed": len(control_failures(s, n)) == 0,
+        }
+        desc_sha = None
+        manual_only = None
+    else:
+        if rec.get("with_skills"):
+            raise Invalid("a --with-skills routing check is not a solo triggering record; keep it in its workspace")
         p = rec.get("plugin") or {}
         if not p.get("skill_tree") or not p.get("description_sha256"):
             raise Invalid("plugin.skill_tree or plugin.description_sha256 is null: commit the skill and re-run")
-        if not rec.get("manual_only") and "validation" not in rec.get("splits", {}):
-            raise Invalid("an auto-triggered skill's record needs a validation split")
-        if rec.get("manual_only") and "negative" not in rec.get("splits", {}):
+        manual_only = bool(rec.get("manual_only"))
+        splits = rec.get("splits") or {}
+        if not splits:
+            raise Invalid("triggering record has no splits")
+        if manual_only and "negative" not in splits:
             raise Invalid("a manual-only skill's record needs a negative split")
-        stamp, suffix = rec.get("measured_at") or utc_now(), "-triggering"
-    else:
-        raise Invalid("a record is benchmark.json or triggering.json")
-    date = (args[1] if len(args) > 1 and args[1] else stamp[:10])
+        tree = p["skill_tree"]
+        desc_sha = p["description_sha256"]
+        stamp = rec.get("measured_at") or utc_now()
+        queries = sum(s["queries"] for s in splits.values())
+        passed = sum(s["passed"] for s in splits.values())
+        inconclusive = sum(s["inconclusive"] for s in splits.values())
+        all_passed = (
+            queries > 0
+            and all(s["queries"] > 0 and s["inconclusive"] == 0 and s["passed"] == s["queries"]
+                    for s in splits.values())
+        )
+        payload_key = "triggering"
+        payload = {
+            "passed": passed,
+            "queries": queries,
+            "runs": rec.get("runs", 0),
+            "inconclusive": inconclusive,
+            "all_passed": all_passed,
+        }
+
+    date = date_arg or stamp[:10]
     if not re.match(r"^\d{4}-\d{2}-\d{2}$", date):
         raise Invalid(f"bad date {date!r}")
-    model = model_slug(rec.get("model"))
-    print(f"{date}-{rec['pack']}-{rec['skill']}-{rec['harness']}{'-' + model if model else ''}{suffix}")
 
+    target = os.path.join(results_dir, pack, f"{skill}.json")
+    doc = None
+    if os.path.isfile(target):
+        try:
+            existing = load_json(target)
+            if isinstance(existing, dict) and existing.get("skill_tree") == tree:
+                doc = existing
+        except (OSError, ValueError):
+            doc = None
+    if doc is None:
+        doc = {"pack": pack, "skill": skill, "skill_tree": tree, "results": []}
+    if desc_sha is not None:
+        doc["description_sha256"] = desc_sha
+        doc["manual_only"] = manual_only
 
-def model_slug(model):
-    """A record name's model part: the model id lowercased, other characters as single dashes."""
-    if not isinstance(model, str):
-        return ""
-    return re.sub(r"[^a-z0-9]+", "-", model.lower()).strip("-")
+    entries = list(doc.get("results") or [])
+    entry = next((e for e in entries if e.get("model") == model and e.get("harness") == harness), None)
+    if entry is None:
+        entry = {"model": model, "harness": harness, "date": date}
+        entries.append(entry)
+    else:
+        entry["date"] = date
+    entry[payload_key] = payload
+    entries.sort(key=lambda e: (str(e.get("model") or ""), str(e.get("harness") or "")))
+    doc["results"] = entries
+
+    os.makedirs(os.path.dirname(target), exist_ok=True)
+    dump_json(doc, target)
+    print(target)
 
 
 def pct(x):
     return DASH if x is None else f"{round(100 * x)}%"
-
-
-def signed(x):
-    if x is None:
-        return DASH
-    return f"+{x}" if x >= 0 else str(x)
-
-
-def diff(a, b):
-    return None if a is None or b is None else (a - b if isinstance(a - b, int) else round(a - b, 2))
 
 
 def cell(text):
@@ -839,39 +891,44 @@ def cell(text):
 
 
 def scoreboard_rows(results_dir):
-    latest = {}
-    for path in sorted(glob.glob(os.path.join(results_dir, "*", "benchmark.json"))):
+    rows = []
+    for path in sorted(glob.glob(os.path.join(results_dir, "*", "*.json"))):
         try:
-            rec = load_json(path)
-            key = (rec["pack"], rec["skill"], str(rec.get("model") or ""))
-            order = (rec.get("measured_at", ""), os.path.basename(os.path.dirname(path)))
+            doc = load_json(path)
+            pack, skill = doc["pack"], doc["skill"]
+            entries = doc.get("results") or []
         except (OSError, ValueError, KeyError, TypeError):
             continue
-        if key not in latest or order > latest[key][0]:
-            latest[key] = (order, path, rec)
-    rows = []
-    for key in sorted(latest):
-        _, path, rec = latest[key]
-        summ = rec.get("run_summary", {})
-        shipped = rec.get("shipped_arm", "full")
-        s, n = summ.get(shipped, {}), summ.get("none")
-        if n:
-            ctrl = (f"{signed(diff(s['control_non_trigger']['median_tool_calls'], n['control_non_trigger']['median_tool_calls']))} calls / "
-                    f"{signed(diff(s['control_small_fix']['median_tool_calls'], n['control_small_fix']['median_tool_calls']))} calls, "
-                    f"{signed(diff(s['control_small_fix']['median_turns'], n['control_small_fix']['median_turns']))} turns")
-            tokens = signed(diff(s["control_small_fix"]["median_output_tokens"],
-                                 n["control_small_fix"]["median_output_tokens"]))
-            if tokens != DASH:
-                tokens += " output (small fix)"
+        if not entries:
+            continue
+        b_entries = [e for e in entries if isinstance(e.get("benchmark"), dict)]
+        t_entries = [e for e in entries if isinstance(e.get("triggering"), dict)]
+        if b_entries:
+            rates = " · ".join(
+                f"{e.get('model', 'unknown')} {pct(e['benchmark'].get('pass_rate'))} vs "
+                f"{pct(e['benchmark'].get('none_pass_rate'))}"
+                for e in b_entries
+            )
+            controls = "pass" if all(e["benchmark"].get("controls_passed") for e in b_entries) else "fail"
         else:
-            ctrl = tokens = DASH
-        dirname = os.path.basename(os.path.dirname(path))
-        rel = f"evals/results/{dirname}/benchmark.json"
+            rates = controls = DASH
+        if t_entries:
+            ratios = [f"{e['triggering'].get('passed')}/{e['triggering'].get('queries')}" for e in t_entries]
+            if len(set(ratios)) == 1:
+                trig = ratios[0]
+            else:
+                trig = " · ".join(
+                    f"{e.get('model', 'unknown')} {e['triggering'].get('passed')}/{e['triggering'].get('queries')}"
+                    for e in t_entries
+                )
+        else:
+            trig = DASH
+        dates = [str(e.get("date") or "") for e in entries if e.get("date")]
+        updated = max(dates) if dates else DASH
+        rel = f"evals/results/{pack}/{skill}.json"
         rows.append("| " + " | ".join(cell(c) for c in (
-            f"`{rec['pack']}/{rec['skill']}`", f"`{shipped}`",
-            f"{pct(s.get('pass_rate'))} vs {pct(n.get('pass_rate')) if n else DASH}",
-            ctrl, tokens, f"{rec.get('model', 'unknown')}, {str(rec.get('measured_at', ''))[:10]}",
-        )) + f" | [{dirname}]({rel}) |")
+            f"`{pack}/{skill}`", rates, controls, trig, updated,
+        )) + f" | [{skill}.json]({rel}) |")
     return rows
 
 
@@ -905,7 +962,7 @@ COMMANDS = {
     "cases": cmd_cases, "grade": cmd_grade, "benchmark": cmd_benchmark,
     "skill-meta": cmd_skill_meta, "check-candidate": cmd_check_candidate,
     "set-description": cmd_set_description, "queries": cmd_queries,
-    "triggering": cmd_triggering, "record-name": cmd_record_name, "scoreboard": cmd_scoreboard,
+    "triggering": cmd_triggering, "record": cmd_record, "scoreboard": cmd_scoreboard,
     "written-skill": cmd_written_skill, "trigger-plan": cmd_trigger_plan,
 }
 

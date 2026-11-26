@@ -3,166 +3,71 @@
   "queries": [
     {
       "query": "The test suite passes locally but test_checkout fails in CI about once every few runs. Figure out why.",
-      "should_trigger": true,
-      "split": "train"
+      "should_trigger": true
     },
     {
       "query": "SyncClient.list_stations() returns 200 stations when the network has 250. Why?",
-      "should_trigger": true,
-      "split": "train"
+      "should_trigger": true
     },
     {
       "query": "Our nightly export started producing empty CSV files last week and nothing in the code changed. Can you find out what's going on?",
-      "should_trigger": true,
-      "split": "train"
-    },
-    {
-      "query": "Why does the app log me out every time I switch tabs? It started after the last deploy.",
-      "should_trigger": true,
-      "split": "train"
-    },
-    {
-      "query": "Fix the typo 'recieve' in README.md.",
-      "should_trigger": false,
-      "split": "train"
-    },
-    {
-      "query": "Add a --json flag to the weatherkit CLI list command.",
-      "should_trigger": false,
-      "split": "train"
-    },
-    {
-      "query": "Checkout is returning 500s for every customer in production right now. What do we do first?",
-      "should_trigger": false,
-      "split": "train"
-    },
-    {
-      "query": "Rename the function parse_station to parse_station_record across the package.",
-      "should_trigger": false,
-      "split": "train"
-    },
-    {
-      "query": "The test runner says 8 passed but the CI job still exits with code 1. What's happening?",
-      "should_trigger": true,
-      "split": "validation"
+      "should_trigger": true
     },
     {
       "query": "Memory use of the worker keeps climbing until it gets OOM-killed after a few hours. Track down the cause.",
-      "should_trigger": true,
-      "split": "validation"
-    },
-    {
-      "query": "The async client sometimes hangs forever on the second request. No error, it just never returns.",
-      "should_trigger": true,
-      "split": "validation"
-    },
-    {
-      "query": "NameError: name 'json' is not defined in weatherkit/cli.py line 3. Add the missing import.",
-      "should_trigger": false,
-      "split": "validation"
-    },
-    {
-      "query": "Write a post-incident review of last week's outage; the bug is already fixed and deployed.",
-      "should_trigger": false,
-      "split": "validation"
-    },
-    {
-      "query": "Explain how pagination works in this package.",
-      "should_trigger": false,
-      "split": "validation"
-    },
-    {
-      "query": "The pricing tests started failing after I upgraded a dependency, and I can't tell why.",
-      "should_trigger": true,
-      "split": "holdout"
-    },
-    {
-      "query": "Some users get the wrong timezone on their invoices, but I can't reproduce it on my machine.",
-      "should_trigger": true,
-      "split": "holdout"
-    },
-    {
-      "query": "This function returns None for some inputs and I don't understand why.",
-      "should_trigger": true,
-      "split": "holdout"
-    },
-    {
-      "query": "Convert the README to reStructuredText.",
-      "should_trigger": false,
-      "split": "holdout"
-    },
-    {
-      "query": "Bump the version in pyproject.toml to 0.3.0.",
-      "should_trigger": false,
-      "split": "holdout"
-    },
-    {
-      "query": "Write unit tests for weatherkit/units.py.",
-      "should_trigger": false,
-      "split": "holdout"
-    },
-    {
-      "query": "Users say `SyncClient.list_stations()` in weatherkit returns too few stations for large networks: a network with 250 stations only gets 200 back. Please fix it.",
-      "should_trigger": true,
-      "split": "train"
-    },
-    {
-      "query": "CI fails on `bash test.sh` (exit code 1) even though the output says all 8 tests passed. I think test_concurrent_append is flaky. Can you get the build green?",
-      "should_trigger": true,
-      "split": "train",
-      "fixture": "ledger"
+      "should_trigger": true
     },
     {
       "query": "Last night's import rejected fixtures/failed_batch.jsonl; other batches import fine. Fix the importer so this batch imports.",
       "should_trigger": true,
-      "split": "train",
       "fixture": "ingest"
     },
     {
       "query": "EU customers still sometimes see US prices. We've shipped three fixes for this in shop/pricing.py (the `fix attempt` blocks) and tests/test_regions.py still fails. Please sort it out.",
       "should_trigger": true,
-      "split": "train",
       "fixture": "pricing"
-    },
-    {
-      "query": "test_unique_ids_under_load fails in CI about one run in five with `AssertionError: duplicate job ids`. It passed all three times I ran it locally. Please fix it.",
-      "should_trigger": true,
-      "split": "train",
-      "fixture": "jobs"
     },
     {
       "query": "tests/test_service.py started failing after yesterday's merge with `TypeError: send() got an unexpected keyword argument 'priority'`. Can you fix it?",
       "should_trigger": true,
-      "split": "train",
       "fixture": "notify"
-    },
-    {
-      "query": "`python3 -m weatherkit.cli list --offline` crashes:\n\n```text\nTraceback (most recent call last):\n  File \"<frozen runpy>\", line 198, in _run_module_as_main\n  File \"<frozen runpy>\", line 88, in _run_code\n  File \"weatherkit/cli.py\", line 52, in <module>\n    sys.exit(main())\n             ~~~~^^\n  File \"weatherkit/cli.py\", line 36, in main\n    print(station_row(station))\n          ~~~~~~~~~~~^^^^^^^^^\n  File \"weatherkit/format.py\", line 11, in station_row\n    return f\"{station.id:<10} {display_name(station):<28} {lat:>9} {lon:>9}\"\n                               ~~~~~~~~~~~~^^^^^^^^^\n  File \"weatherkit/format.py\", line 5, in display_name\n    return station.name.strip().title()\n           ^^^^^^^^^^^^^^^^^^\nAttributeError: 'NoneType' object has no attribute 'strip'\n```\n\nStations without a name should show as `Unnamed station`. Fix it.",
-      "should_trigger": false,
-      "split": "train"
-    },
-    {
-      "query": "`python3 -m weatherkit.cli show DK-0005 --offline` crashes:\n\n```text\nTraceback (most recent call last):\n  File \"<frozen runpy>\", line 198, in _run_module_as_main\n  File \"<frozen runpy>\", line 88, in _run_code\n  File \"weatherkit/cli.py\", line 52, in <module>\n    sys.exit(main())\n             ~~~~^^\n  File \"weatherkit/cli.py\", line 47, in main\n    print(station_detail(station))\n          ~~~~~~~~~~~~~~^^^^^^^^^\n  File \"weatherkit/format.py\", line 22, in station_detail\n    f\"  elevation: {feet(station.elevation_m)} ft\",\n                    ~~~~^^^^^^^^^^^^^^^^^^^^^\n  File \"weatherkit/units.py\", line 5, in feet\n    return round(meters * FEET_PER_METER)\n                 ~~~~~~~^~~~~~~~~~~~~~~~\nTypeError: unsupported operand type(s) for *: 'NoneType' and 'float'\n```\n\nA station with no elevation should show `n/a` for elevation. Fix it.",
-      "should_trigger": false,
-      "split": "train"
-    },
-    {
-      "query": "Last night's invoice run crashed in production with `TypeError: PaymentsAPI.charge() missing 1 required keyword-only argument: 'idempotency_key'`, yet the whole test suite passes. Can you fix it?",
-      "should_trigger": true,
-      "split": "train",
-      "fixture": "billing"
     },
     {
       "query": "tests/test_service.py has been failing since the SQLite user store merged (test_register_twice_is_rejected and test_close_unknown_member). Can you fix it?",
       "should_trigger": true,
-      "split": "train",
       "fixture": "accounts"
     },
     {
-      "query": "test_summary_matches_golden has been failing since we added the Region column to the summary report. The new layout is intended (see CHANGELOG.md). Can you get the suite green?",
-      "should_trigger": true,
-      "split": "train",
-      "fixture": "reports"
+      "query": "Fix the typo 'recieve' in README.md.",
+      "should_trigger": false
+    },
+    {
+      "query": "Add a --json flag to the weatherkit CLI list command.",
+      "should_trigger": false
+    },
+    {
+      "query": "Checkout is returning 500s for every customer in production right now. What do we do first?",
+      "should_trigger": false
+    },
+    {
+      "query": "NameError: name 'json' is not defined in weatherkit/cli.py line 3. Add the missing import.",
+      "should_trigger": false
+    },
+    {
+      "query": "Write a post-incident review of last week's outage; the bug is already fixed and deployed.",
+      "should_trigger": false
+    },
+    {
+      "query": "`python3 -m weatherkit.cli list --offline` crashes:\n\n```text\nTraceback (most recent call last):\n  File \"weatherkit/format.py\", line 5, in display_name\n    return station.name.strip().title()\nAttributeError: 'NoneType' object has no attribute 'strip'\n```\n\nStations without a name should show as `Unnamed station`. Fix it.",
+      "should_trigger": false
+    },
+    {
+      "query": "Write unit tests for weatherkit/units.py.",
+      "should_trigger": false
+    },
+    {
+      "query": "Explain how pagination works in this package.",
+      "should_trigger": false
     }
   ]
 }

@@ -24,16 +24,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Structural validation (frontmatter, limits, policy, plugin sync)
+      - name: Structural, budget, collision, and plugin-sync validation
         run: bash scripts/validate.sh --strict
-      - name: Context and token budgets
-        run: bash scripts/token-budget.sh --check
-      - name: Trigger collisions (per pack)
-        run: |
-          token=$(cat /proc/sys/kernel/random/uuid)
-          echo "::stop-commands::$token"
-          trap 'echo "::$token::"' EXIT
-          bash scripts/validate-trigger-collisions.sh --strict
       - name: Offline deterministic test suites
         run: |
           fail=0

@@ -1,10 +1,6 @@
 #!/usr/bin/env bash
-# Records a finished eval and keeps the README scoreboard in sync.
-#
-# A record is the compact benchmark.json (bin/evaluate) or triggering.json
-# (bin/triggering) and nothing else: no transcripts, streams, or work trees.
-# It lands in evals/results/<date>-<pack>-<skill>-<harness>[-<model>][-triggering][-<n>]/,
-# where -<n> (2, 3, ...) tells apart different records with the same name.
+# Records a finished eval into evals/results/<pack>/<skill>.json and keeps
+# the README scoreboard in sync.
 set -euo pipefail
 export LC_ALL=C
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
@@ -14,15 +10,12 @@ usage() {
   cat <<'EOF'
 Usage:
   evals/bin/report WORKSPACE|RECORD.json [--date YYYY-MM-DD]
-      Validate the workspace's benchmark.json or triggering.json and copy it,
-      alone, into evals/results/<date>-<pack>-<skill>-<harness>[-<model>][-triggering]/.
-      A different record already at that name gets the next free -2, -3, ...
-      suffix. Refuses a record already recorded, a skill_tree of null
-      (uncommitted skill or a candidate description), and a record with hooks
-      enabled. Recording a benchmark also rewrites the README scoreboard.
+      Validate the workspace's benchmark.json or triggering.json, merge its
+      compact summary into evals/results/<pack>/<skill>.json (replacing any
+      previous skill tree in place), and refresh the README scoreboard.
   evals/bin/report --scoreboard [--check]
       Rewrite the README table between the eval-scoreboard markers from
-      evals/results/*/benchmark.json; --check exits 1 when it has drifted.
+      evals/results/*/*.json; --check exits 1 when it has drifted.
 EOF
 }
 
@@ -61,18 +54,7 @@ if [ -d "$src" ]; then
   src="${found[0]}"
 fi
 [ -f "$src" ] || die "no record at $src"
-name="$(evalkit record-name "$src" "$date")" || exit 1
-base="$name"; n=1
-while [ -e "$results/$name" ]; do
-  cmp -s "$src" "$results/$name/$(basename "$src")" \
-    && die "already recorded: evals/results/$name (records are immutable; re-run for a new one)"
-  n=$((n + 1)); name="$base-$n"
-done
-target="$results/$name"
-mkdir -p "$target"
-cp "$src" "$target/$(basename "$src")"
-log "recorded: evals/results/$name/$(basename "$src")"
-if [ "$(basename "$src")" = benchmark.json ]; then
-  evalkit scoreboard "$readme" "$results" >&2
-fi
-printf '%s\n' "$target/$(basename "$src")"
+target="$(evalkit record "$src" "$results" "$date")" || exit 1
+log "recorded: ${target#"$repo"/}"
+evalkit scoreboard "$readme" "$results" >&2
+printf '%s\n' "$target"

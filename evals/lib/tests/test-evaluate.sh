@@ -19,18 +19,18 @@ mode() { printf '%s\n' "$1" > "$FAKE_STATE/mode"; }
 EVALS_COST_PER_SESSION=0.5 "$EV" "${SK[@]}" --dry-run > /dev/null 2> "$TL_TMP/dry.err"
 eq "a dry run exits 0" 0 $?
 eq "a dry run launches nothing" 0 "$(tl_launches)"
-contains "the default plan is 3 cases x 3 arms x 3 runs" "$TL_TMP/dry.err" "3 case(s) x 3 arm(s) x 3 run(s) = 27 agent session(s), 1 at a time"
-contains "the default worst-case wall time is serial" "$TL_TMP/dry.err" "worst-case wall time: 405 min at --timeout 900"
-contains "the default arms are full,distilled,none" "$TL_TMP/dry.err" "arms=full,distilled,none"
+contains "the default plan is 3 cases x 2 arms x 3 runs" "$TL_TMP/dry.err" "3 case(s) x 2 arm(s) x 3 run(s) = 18 agent session(s), 1 at a time"
+contains "the default worst-case wall time is serial" "$TL_TMP/dry.err" "worst-case wall time: 270 min at --timeout 900"
+contains "the default arms are full,none" "$TL_TMP/dry.err" "arms=full,none"
 contains "the plan states hooks are off" "$TL_TMP/dry.err" "hooks OFF in every arm"
-contains "the plan is priced" "$TL_TMP/dry.err" "estimated cost: 13.50"
+contains "the plan is priced" "$TL_TMP/dry.err" "estimated cost: 9.00"
 eq "a dry run writes no workspace" "" "$(ls -A "$EVALS_WORKSPACE")"
 "$EV" "${SK[@]}" --jobs 3 --dry-run > /dev/null 2> "$TL_TMP/dry.err"
 eq "a --jobs 3 dry run exits 0" 0 $?
-contains "the --jobs 3 plan names concurrency" "$TL_TMP/dry.err" "27 agent session(s), 3 at a time"
-contains "the --jobs 3 worst-case wall time divides by jobs" "$TL_TMP/dry.err" "worst-case wall time: 135 min at --timeout 900"
+contains "the --jobs 3 plan names concurrency" "$TL_TMP/dry.err" "18 agent session(s), 3 at a time"
+contains "the --jobs 3 worst-case wall time divides by jobs" "$TL_TMP/dry.err" "worst-case wall time: 90 min at --timeout 900"
 "$EV" "${SK[@]}" --jobs 4 --dry-run > /dev/null 2> "$TL_TMP/dry.err"
-contains "the --jobs 4 worst-case wall time rounds up" "$TL_TMP/dry.err" "worst-case wall time: 105 min at --timeout 900"
+contains "the --jobs 4 worst-case wall time rounds up" "$TL_TMP/dry.err" "worst-case wall time: 75 min at --timeout 900"
 FAKE_CLI_MISSING=1 FAKE_RUNNABLE=no "$EV" "${SK[@]}" --dry-run > /dev/null 2> "$TL_TMP/dry.err"
 eq "a dry run needs no CLI and no runnable adapter" 0 $?
 contains "a dry run names an unverified adapter" "$TL_TMP/dry.err" "runnable=no"
@@ -41,7 +41,8 @@ bad() { # $1 description, rest: args
   if "$EV" "${SK[@]}" --dry-run "$@" > /dev/null 2>&1; then not_ok "refuses $d"; else ok "refuses $d"; fi
 }
 bad "an unknown arm" --arms full,bogus
-bad "arms without full" --arms distilled,none
+bad "removed distilled arm" --arms full,distilled,none
+bad "arms without full" --arms none
 bad "a repeated arm" --arms full,full
 bad "old_skill without --base" --arms full,old_skill
 bad "--base without old_skill" --base HEAD
@@ -51,8 +52,6 @@ bad "a zero --jobs" --jobs 0
 bad "a negative --jobs" --jobs -1
 bad "a non-numeric --jobs" --jobs abc
 bad "a leading-zero --jobs" --jobs 01
-bad "a bad --shipped-arm" --shipped-arm none
-bad "--shipped-arm distilled without the arm" --arms full,none --shipped-arm distilled
 bad "an unknown case id" --eval nope
 bad "an unknown harness" --harness ../fake
 eq "argument errors launch nothing" 0 "$(tl_launches)"
@@ -78,7 +77,7 @@ evaluate --runs 1
 unset EVALS_TEST_SECRET
 eq "a promotion run exits 0" 0 "$rc"
 eq "it prints the benchmark path" "$bench" "$(cat "$TL_TMP/evaluate.out")"
-eq "it ran 3 cases x 3 arms x 1 run" 9 "$(tl_launches)"
+eq "it ran 3 cases x 2 arms x 1 run" 6 "$(tl_launches)"
 
 jeq "benchmark.json has exactly the record keys" "$bench" 'keys' \
   '["arms","deltas","evals","harness","harness_version","hooks_enabled","measured_at","mode","model","pack","run_summary","runs_per_eval","schema_version","shipped_arm","skill"]'
@@ -88,25 +87,22 @@ check "measured_at is a UTC timestamp" q jq -e '.measured_at | test("^[0-9]{4}-[
 head="$(git -C "$repo" rev-parse HEAD)"
 jeq "arms bind the full skill tree" "$bench" '.arms.full' \
   "{\"commit\":\"$head\",\"skill_tree\":\"$(git -C "$repo" rev-parse HEAD:skills/in-progress/demo-skill)\"}"
-jeq "arms bind the distilled tree" "$bench" '.arms.distilled' \
-  "{\"commit\":\"$head\",\"skill_tree\":\"$(git -C "$repo" rev-parse HEAD:evals/engineering/demo-skill/distilled)\"}"
 jeq "the none arm is null" "$bench" '.arms | has("none") and .none == null' true
-jeq "run_summary has one entry per arm" "$bench" '.run_summary | keys' '["distilled","full","none"]'
+jeq "run_summary has one entry per arm" "$bench" '.run_summary | keys' '["full","none"]'
 jeq "an arm summary has exactly its keys" "$bench" '.run_summary.full | keys' \
   '["control_non_trigger","control_small_fix","indeterminate_count","mean_output_tokens","mean_time_seconds","needs_review_count","pass_rate","scored_runs"]'
 jeq "control_non_trigger keys" "$bench" '.run_summary.full.control_non_trigger | keys' '["median_tool_calls","skill_loads","unrequested_files"]'
 jeq "control_small_fix keys" "$bench" '.run_summary.full.control_small_fix | keys' '["median_output_tokens","median_tool_calls","median_turns","pass_rate"]'
-jeq "trap pass rates: the skill teaches the registry step" "$bench" '[.run_summary.full.pass_rate, .run_summary.distilled.pass_rate, .run_summary.none.pass_rate]' '[1,1,0]'
-jeq "pass_rate counts trap runs only" "$bench" '[.run_summary[].scored_runs]' '[1,1,1]'
-jeq "no run was indeterminate" "$bench" '[.run_summary[].indeterminate_count]' '[0,0,0]'
-jeq "non_trigger controls" "$bench" '.run_summary.distilled.control_non_trigger' '{"skill_loads":0,"unrequested_files":0,"median_tool_calls":1}'
+jeq "trap pass rates: the skill teaches the registry step" "$bench" '[.run_summary.full.pass_rate, .run_summary.none.pass_rate]' '[1,0]'
+jeq "pass_rate counts trap runs only" "$bench" '[.run_summary[].scored_runs]' '[1,1]'
+jeq "no run was indeterminate" "$bench" '[.run_summary[].indeterminate_count]' '[0,0]'
+jeq "non_trigger controls" "$bench" '.run_summary.full.control_non_trigger' '{"skill_loads":0,"unrequested_files":0,"median_tool_calls":1}'
 jeq "small_fix controls use output tokens" "$bench" '.run_summary.full.control_small_fix' '{"pass_rate":1,"median_output_tokens":30,"median_tool_calls":1,"median_turns":1}'
-jeq "deltas are fractions" "$bench" '.deltas' '{"full_vs_none":1,"distilled_vs_none":1,"full_vs_distilled":0}'
-jeq "per-case arms" "$bench" '.evals[0]' '{"id":"rename-widget","kind":"trap","arms":{"full":{"scored_runs":1,"passed":1,"indeterminate":0,"needs_review":0},"distilled":{"scored_runs":1,"passed":1,"indeterminate":0,"needs_review":0},"none":{"scored_runs":1,"passed":0,"indeterminate":0,"needs_review":0}}}'
-jeq "the decision table ships distilled" "$bench" '.shipped_arm' '"distilled"'
-contains "the decision is explained" "$TL_TMP/evaluate.err" "decision: distilled beats none"
+jeq "deltas are fractions" "$bench" '.deltas' '{"full_vs_none":1}'
+jeq "per-case arms" "$bench" '.evals[0]' '{"id":"rename-widget","kind":"trap","arms":{"full":{"scored_runs":1,"passed":1,"indeterminate":0,"needs_review":0},"none":{"scored_runs":1,"passed":0,"indeterminate":0,"needs_review":0}}}'
+jeq "shipped_arm is full" "$bench" '.shipped_arm' '"full"'
 
-# Raw runs stay in the workspace; only the record would be copied to results/.
+# Raw runs stay in the workspace; only the compact summary is recorded to results/.
 rd="$ws/runs/rename-widget/full/run-1"
 for f in prompt.txt stream.ndjson stderr.log response.txt run_status.json metrics.json grading.json changed-files.txt diff.patch; do
   check "a run keeps $f" test -f "$rd/$f"
@@ -119,15 +115,13 @@ contains "the diff is kept" "$rd/diff.patch" "+newWidget"
 # Hooks stay OFF: bundles hold SKILL.md and its support dirs, never hooks/.
 eq "the full bundle holds only skill files" "./skills/demo-skill/SKILL.md ./skills/demo-skill/references/guide.md" \
   "$(cd "$ws/bundles/full" && find . -type f | sort | paste -sd' ')"
-eq "the distilled bundle holds only its SKILL.md" "./skills/demo-skill/SKILL.md" \
-  "$(cd "$ws/bundles/distilled" && find . -type f | sort | paste -sd' ')"
 check "the source skill does carry a hooks file" test -f "$repo/skills/in-progress/demo-skill/hooks/hooks.json"
 lacks "no installed bundle carried hooks" "$FAKE_STATE/bundle.behavioral" "hooks"
 eq "the none arm installs nothing" 3 "$(grep -c 'bundle=-' "$FAKE_LAUNCH_LOG")"
 
 # Isolation: a fresh HOME per session, outside the repo, removed afterwards;
 # credentials seeded; the operator environment cleared.
-eq "every session had its own HOME" 9 "$(sed -n 's/.* home=\([^ ]*\) .*/\1/p' "$FAKE_STATE/launches" | sort -u | wc -l | tr -d ' ')"
+eq "every session had its own HOME" 6 "$(sed -n 's/.* home=\([^ ]*\) .*/\1/p' "$FAKE_STATE/launches" | sort -u | wc -l | tr -d ' ')"
 bad_home=0
 while read -r h; do
   case "$h" in "$TMPDIR"/augments-evals-*/home) ;; *) bad_home=1 ;; esac
@@ -136,24 +130,18 @@ while read -r h; do
 done < <(sed -n 's/.* home=\([^ ]*\) .*/\1/p' "$FAKE_STATE/launches")
 eq "homes live under TMPDIR and are removed" 0 "$bad_home"
 eq "the run directories are removed" "" "$(ls -A "$TMPDIR")"
-eq "sessions run in their work tree" 9 "$(awk '{ split($3, a, "="); split($4, b, "="); if (a[2] == b[2]) n++ } END { print n + 0 }' "$FAKE_STATE/launches")"
-eq "credentials and .eval-env are seeded into every session" 9 "$(grep -c 'api_key=seeded-key .*token_file=yes' "$FAKE_STATE/launches")"
+eq "sessions run in their work tree" 6 "$(awk '{ split($3, a, "="); split($4, b, "="); if (a[2] == b[2]) n++ } END { print n + 0 }' "$FAKE_STATE/launches")"
+eq "credentials and .eval-env are seeded into every session" 6 "$(grep -c 'api_key=seeded-key .*token_file=yes' "$FAKE_STATE/launches")"
 eq "the operator environment never reaches a session" 0 "$(grep -c 'leaked=operator-secret' "$FAKE_STATE/launches")"
 lacks "a session environment has no operator secret" "$FAKE_STATE/env.behavioral" "EVALS_TEST_SECRET"
 contains "a session has no route to a session bus" "$FAKE_STATE/env.behavioral" "DBUS_SESSION_BUS_ADDRESS=unix:path="
 refute "no credential lands in the workspace" q grep -rq seeded-key "$ws"
 rm -rf "$EVALS_CREDENTIAL_SEED/fake"
 
-# --- the shipped-arm flag -----------------------------------------------------
-evaluate --runs 1 --shipped-arm full
-jeq "--shipped-arm overrides the decision table" "$bench" '.shipped_arm' '"full"'
-
-# --- control gates: a skill that sprawls is not shipped distilled -------------
+# --- control tracking: unrequested files on non_trigger -----------------------
 mode sprawl
 evaluate --runs 1
-jeq "unrequested files are counted per arm" "$bench" '[.run_summary[].control_non_trigger.unrequested_files]' '[1,1,0]'
-jeq "a failed control gate ships full" "$bench" '.shipped_arm' '"full"'
-contains "the failed gate is named" "$TL_TMP/evaluate.err" "distilled control gate: non_trigger unrequested_files=1"
+jeq "unrequested files are counted per arm" "$bench" '[.run_summary[].control_non_trigger.unrequested_files]' '[1,0]'
 jeq "the sprawl did not change the trap pass rate" "$bench" '.run_summary.full.pass_rate' 1
 
 # --- indeterminate runs are counted apart ------------------------------------
@@ -188,7 +176,7 @@ eq "a credential seed that is not a directory is skipped" completed "$(jq -r .ou
 # --- parallel runs (--jobs) ---------------------------------------------------
 : > "$FAKE_LAUNCH_LOG"; rm -rf "$FAKE_STATE/launches" "$FAKE_STATE/concurrency" "$FAKE_STATE/active"
 mode parallel
-evaluate --runs 2 --eval change-greeting --arms full,distilled,none --jobs 3
+evaluate --runs 3 --eval change-greeting --arms full,none --jobs 3
 eq "--jobs 3 parallel run exits 0" 0 "$rc"
 eq "--jobs 3 ran all 6 sessions" 6 "$(tl_launches)"
 max_conc="$(awk 'BEGIN { m = 0 } $1 + 0 > m { m = $1 + 0 } END { print m }' "$FAKE_STATE/concurrency")"
@@ -197,24 +185,23 @@ check "--jobs 3 never exceeded the concurrency cap (peak=${max_conc})" test "$ma
 eq "--jobs 3 gave every session its own HOME" 6 "$(sed -n 's/.* home=\([^ ]*\) .*/\1/p' "$FAKE_STATE/launches" | sort -u | wc -l | tr -d ' ')"
 eq "--jobs 3 removed all run directories" "" "$(ls -A "$TMPDIR")"
 contains "--jobs 3 completion logs name the run" "$TL_TMP/evaluate.err" "done: change-greeting [small_fix] arm=full run=1 -> pass"
-jeq "--jobs 3 scored all 6 small_fix runs" "$bench" '[.run_summary.full.control_small_fix.pass_rate, .run_summary.distilled.control_small_fix.pass_rate, .run_summary.none.control_small_fix.pass_rate]' '[1,1,1]'
-jeq "--jobs 3 had zero indeterminate runs" "$bench" '[.run_summary[].indeterminate_count]' '[0,0,0]'
+jeq "--jobs 3 scored all 6 small_fix runs" "$bench" '[.run_summary.full.control_small_fix.pass_rate, .run_summary.none.control_small_fix.pass_rate]' '[1,1]'
+jeq "--jobs 3 had zero indeterminate runs" "$bench" '[.run_summary[].indeterminate_count]' '[0,0]'
 
 : > "$FAKE_LAUNCH_LOG"; rm -rf "$FAKE_STATE/launches" "$FAKE_STATE/concurrency" "$FAKE_STATE/active"
 mode ""
 evaluate --runs 1 --jobs 3
 eq "a parallel promotion run exits 0" 0 "$rc"
-eq "a parallel promotion run launched all 9 sessions" 9 "$(tl_launches)"
-jeq "parallel promotion trap pass rates match serial" "$bench" '[.run_summary.full.pass_rate, .run_summary.distilled.pass_rate, .run_summary.none.pass_rate]' '[1,1,0]'
-jeq "parallel promotion deltas match serial" "$bench" '.deltas' '{"full_vs_none":1,"distilled_vs_none":1,"full_vs_distilled":0}'
-jeq "parallel promotion ships distilled" "$bench" '.shipped_arm' '"distilled"'
+eq "a parallel promotion run launched all 6 sessions" 6 "$(tl_launches)"
+jeq "parallel promotion trap pass rates match serial" "$bench" '[.run_summary.full.pass_rate, .run_summary.none.pass_rate]' '[1,0]'
+jeq "parallel promotion deltas match serial" "$bench" '.deltas' '{"full_vs_none":1}'
 eq "parallel promotion removed all run directories" "" "$(ls -A "$TMPDIR")"
 
 # Signal cleanup: SIGTERM stops active parallel workers and removes homes/run dirs.
 : > "$FAKE_LAUNCH_LOG"; rm -rf "$FAKE_STATE/launches"
 mode sleep
 n=$((n + 1)); ws_sig="$TL_TMP/ws/run-$n"
-"$EV" "${SK[@]}" --out "$ws_sig" --runs 1 --eval rename-widget --arms full,distilled,none --jobs 3 --timeout 30 \
+"$EV" "${SK[@]}" --out "$ws_sig" --runs 1 --eval rename-widget,fix-readme-typo --arms full,none --jobs 3 --timeout 30 \
   > "$TL_TMP/sig.out" 2> "$TL_TMP/sig.err" &
 ev_pid=$!
 waited=0
@@ -256,19 +243,19 @@ bad_resume "--resume on a missing dir" --resume "$TL_TMP/no-such-ws"
 mkdir -p "$TL_TMP/empty-ws"
 bad_resume "--resume on a dir without plan.json" --resume "$TL_TMP/empty-ws"
 
-# Resume the SIGTERM-interrupted workspace: all 3 interrupted slots run and score.
+# Resume the SIGTERM-interrupted workspace: all 4 interrupted slots run and score.
 : > "$FAKE_LAUNCH_LOG"; rm -rf "$FAKE_STATE/launches"
 EVALS_COST_PER_SESSION=0.5 resume_eval --resume "$ws_sig" --jobs 2 --dry-run
 eq "--resume --dry-run exits 0" 0 "$rc"
 eq "--resume --dry-run launches nothing" 0 "$(tl_launches)"
-contains "--resume --dry-run reports missing slots" "$TL_TMP/resume.err" "3 of 3 session(s) to run (0 complete, 3 missing, 0 refusal), 2 at a time"
-contains "--resume --dry-run prices only pending sessions" "$TL_TMP/resume.err" "estimated cost: 1.50"
+contains "--resume --dry-run reports missing slots" "$TL_TMP/resume.err" "4 of 4 session(s) to run (0 complete, 4 missing, 0 refusal), 2 at a time"
+contains "--resume --dry-run prices only pending sessions" "$TL_TMP/resume.err" "estimated cost: 2.00"
 resume_eval --resume "$ws_sig" --jobs 2
 eq "--resume after SIGTERM exits 0" 0 "$rc"
 eq "--resume after SIGTERM prints benchmark path" "$ws_sig/benchmark.json" "$(cat "$TL_TMP/resume.out")"
-eq "--resume after SIGTERM ran the 3 interrupted sessions" 3 "$(tl_launches)"
+eq "--resume after SIGTERM ran the 4 interrupted sessions" 4 "$(tl_launches)"
 jeq "--resume after SIGTERM produces valid trap pass rates" "$ws_sig/benchmark.json" \
-  '[.run_summary.full.pass_rate, .run_summary.distilled.pass_rate, .run_summary.none.pass_rate]' '[1,1,0]'
+  '[.run_summary.full.pass_rate, .run_summary.none.pass_rate]' '[1,0]'
 eq "--resume after SIGTERM removed all run directories" "" "$(ls -A "$TMPDIR")"
 
 # Resume after refusal: re-runs refusal slots only, leaving completed slots untouched.
@@ -336,7 +323,7 @@ fu_reason() { jq -r '[.outcome, .reason // "-", .exit_status] | join(" ")' "$ws/
 "$EV" "${SK[@]}" --dry-run > /dev/null 2> "$TL_TMP/dry.err"
 contains "the plan counts a case's follow-ups" "$TL_TMP/dry.err" "  case rename-then-registry (trap, 2 follow-up(s))"
 contains "a single-prompt case is listed as before" "$TL_TMP/dry.err" "  case rename-widget (trap)"
-contains "follow-ups add no sessions to the plan" "$TL_TMP/dry.err" "4 case(s) x 3 arm(s) x 3 run(s) = 36 agent session(s)"
+contains "follow-ups add no sessions to the plan" "$TL_TMP/dry.err" "4 case(s) x 2 arm(s) x 3 run(s) = 24 agent session(s)"
 lacks "a supporting adapter gets no follow-up warning" "$TL_TMP/dry.err" "cannot send follow-ups"
 FAKE_FOLLOWUPS=no "$EV" "${SK[@]}" --dry-run > /dev/null 2> "$TL_TMP/dry.err"
 contains "the plan warns when the adapter cannot send follow-ups" "$TL_TMP/dry.err" \
@@ -408,9 +395,9 @@ wrepo="$(tl_make_repo write-repo)" || tl_done
 tl_use_fake "$wrepo"
 wcase="$wrepo/evals/engineering/demo-skill"
 printf '%s\n' '{"fixture": "app", "queries": [
-  {"query": "Rename the widget called oldWidget", "should_trigger": true, "split": "train"},
-  {"query": "Rename the gadget called oldGadget", "should_trigger": true, "split": "validation"},
-  {"query": "Write a haiku about rain", "should_trigger": false, "split": "train"}]}' > "$wcase/written-queries.json"
+  {"query": "Rename the widget called oldWidget", "should_trigger": true},
+  {"query": "Rename the gadget called oldGadget", "should_trigger": true},
+  {"query": "Write a haiku about rain", "should_trigger": false}]}' > "$wcase/written-queries.json"
 jq '.evals += [{"id": "write-gadget-skill", "kind": "trap", "fixture": "app",
   "prompt": "Write a skill for renaming a widget in this app.",
   "assertions": [{"type": "skill-triggering", "path": ".agents/skills/*", "queries": "written-queries.json", "runs": 2}]}]' \
@@ -462,9 +449,7 @@ mkdir -p "$prepo/skills/engineering/zz-helper"
 printf -- '---\nname: zz-helper\ndescription: "Use when tidying gadgets."\n---\n\nTidy gadgets.\n' \
   > "$prepo/skills/engineering/zz-helper/SKILL.md"
 ( cd "$prepo" && tl_git add -A && tl_git commit -qm "promote zz-helper" ) || not_ok "commit zz-helper"
-bad "a pack arm beside distilled" --arms pack,distilled
 bad "a pack arm beside old_skill" --arms pack,old_skill --base HEAD
-bad "--shipped-arm on a composite run" --arms pack --shipped-arm full
 "$EV" "${SK[@]}" --arms pack --dry-run > /dev/null 2> "$TL_TMP/dry.err"
 eq "a pack-only dry run exits 0" 0 $?
 contains "the pack-only plan is a composite" "$TL_TMP/dry.err" "mode=composite, arms=pack"
