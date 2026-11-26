@@ -7,16 +7,9 @@
 # passes when its rate is above the threshold; a should-not query passes when
 # it is below. A query with no valid run is inconclusive.
 #
-# Queries live in evals/<pack>/<skill>/queries.json:
-#   {"fixture": "<dir under files/>" (optional),
-#    "queries": [{"query", "should_trigger", "split": "train"|"validation"|"holdout"|"negative",
-#                 "fixture" (optional, overrides the file-level one)}]}
-# Seed each query with the files it names: a request about files the work tree
-# lacks leaves the model nothing to act on but the skill, so it overstates loads.
-# A manual-only skill (disable-model-invocation: true) uses split "negative" only.
-#
-# --queries and --skill-dir score any skill folder on any queries file; that is
-# how evals/bin/evaluate scores a skill an agent wrote during a run.
+# Pass --with-skills NAME[,NAME...] (or --with-skills all) to install neighbor
+# skills beside the skill under test for a fast, 1-turn pack-routing check:
+# any query where a neighbor fires at or above the threshold fails.
 #
 # Every query is a live agent session. Run --dry-run first: it prints the count.
 set -uo pipefail
@@ -33,7 +26,10 @@ Usage: evals/bin/triggering --pack PACK --skill NAME [options]
 
   --harness NAME          claude-code (default), codex, or antigravity
   --runs N                runs per query (default 3)
-  --splits LIST           train,validation,holdout,negative (default: every split in queries.json)
+  --splits LIST           filter queries by split (default: all queries in queries.json)
+  --with-skills LIST      install competing neighbor skill(s) beside the skill under test
+                          for a 1-turn routing check (comma-separated names, or "all" for
+                          every other promoted skill in --pack; not recordable)
   --threshold X           trigger-rate threshold, 0 < X < 1 (default 0.5)
   --jobs N                runs in parallel (default 3)
   --timeout SECONDS       per-session timeout (default 120)
@@ -55,7 +51,7 @@ Exit: 0 every query passed · 1 a query failed or was inconclusive
 EOF
 }
 
-pack="" skill="" harness=claude-code runs=3 splits="" threshold=0.5 jobs=3 timeout_s=120 maxturns=6
+pack="" skill="" harness=claude-code runs=3 splits="" with_csv="" threshold=0.5 jobs=3 timeout_s=120 maxturns=6
 desc_file="" model="" out="" print_json=0 allow_unverified=0 dry_run=0 qfile_flag="" skill_dir=""
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -64,6 +60,7 @@ while [ "$#" -gt 0 ]; do
     --harness) harness="${2:-}"; shift 2 ;;
     --runs) runs="${2:-}"; shift 2 ;;
     --splits) splits="${2:-}"; shift 2 ;;
+    --with-skills) with_csv="${2:-}"; shift 2 ;;
     --threshold) threshold="${2:-}"; shift 2 ;;
     --jobs) jobs="${2:-}"; shift 2 ;;
     --timeout) timeout_s="${2:-}"; shift 2 ;;
@@ -109,6 +106,38 @@ else
   src="$repo/$rel"
   meta="$(evalkit skill-meta "$src/SKILL.md")" || exit 2
 fi
+
+with_skills=()
+with_rels=()
+if [ -n "$with_csv" ]; then
+  if [ "$with_csv" = all ]; then
+    for d in "$repo/skills/$pack"/*/; do
+      [ -f "$d/SKILL.md" ] || continue
+      pn="$(basename "$d")"
+      [ "$pn" = "$skill" ] && continue
+      with_skills+=("$pn")
+      with_rels+=("skills/$pack/$pn")
+    done
+    [ "${#with_skills[@]}" -gt 0 ] || fail2 "--with-skills all found no other promoted skills in skills/$pack/"
+  else
+    IFS=, read -r -a raw_with <<< "$with_csv"
+    seen_w=" "
+    for pn in "${raw_with[@]}"; do
+      [ -n "$pn" ] || fail2 "empty skill name in --with-skills"
+      [ "$pn" != "$skill" ] || fail2 "--with-skills cannot name the skill under test ($skill)"
+      case "$seen_w" in *" $pn "*) fail2 "--with-skills listed $pn twice" ;; esac
+      seen_w="$seen_w$pn "
+      prel="$(skill_rel_dir "$repo" "$pack" "$pn")" || fail2 "--with-skills: no skill at skills/$pack/$pn/ or skills/in-progress/$pn/"
+      with_skills+=("$pn")
+      with_rels+=("$prel")
+    done
+  fi
+fi
+with_json='[]'
+if [ "${#with_skills[@]}" -gt 0 ]; then
+  with_json="$(printf '%s\n' "${with_skills[@]}" | jq -R . | jq -s .)"
+fi
+
 qfile="${qfile_flag:-$repo/evals/$pack/$skill/queries.json}"
 [ -f "$qfile" ] || fail2 "no queries at ${qfile_flag:-evals/$pack/$skill/queries.json}"
 qfile="$(cd "$(dirname "$qfile")" && pwd -P)/$(basename "$qfile")"
@@ -129,6 +158,7 @@ load_adapter "$harness" || exit 2
 nq="$(jq length <<< "$queries")"
 sessions=$((nq * runs))
 log "plan: triggering $pack/$skill on $harness (manual_only=$([ "$manual" = 1 ] && echo true || echo false)), $runs run(s) per query, threshold $threshold"
+[ "${#with_skills[@]}" -gt 0 ] && log "  with neighbor skills: ${with_skills[*]} (routing check; not recordable)"
 [ "$runnable" = yes ] || log "  adapter: runnable=no ($runnable_reason)"
 [ -n "$desc_file" ] && log "  scoring a candidate description from $desc_file (not recordable)"
 [ -n "$skill_dir" ] && log "  scoring the skill in $skill_dir on $qfile (not recordable)"
@@ -153,16 +183,37 @@ ws="${out:-${EVALS_WORKSPACE:-$repo/evals/workspaces}/$stamp-$pack-$skill-$harne
 mkdir -p "$ws" || exit 2
 ws="$(cd "$ws" && pwd -P)"
 run_base="$(mktemp -d "${TMPDIR:-/tmp}/augments-evals-$(basename "$ws").XXXXXX")" || exit 2
+active_pids=()
+done_dir=""
 cleanup() {
-  [ -d "$run_base" ] && find "$run_base" -type d -name home -prune -exec rm -rf {} + 2>/dev/null
-  rm -rf "$run_base"
+  trap - INT TERM
+  local entry pid slot_id
+  for entry in "${active_pids[@]+"${active_pids[@]}"}"; do
+    pid="${entry%%:*}"
+    slot_id="${entry#*:}"
+    if [ -z "$done_dir" ] || [ ! -f "$done_dir/$slot_id" ]; then
+      stop_tree "$pid"
+    fi
+  done
+  for entry in "${active_pids[@]+"${active_pids[@]}"}"; do
+    wait "${entry%%:*}" 2>/dev/null || true
+  done
+  if [ -d "${run_base:-}" ]; then
+    find "$run_base" -type d -name home -prune -exec rm -rf {} + 2>/dev/null || true
+    [ -n "$done_dir" ] && rm -rf "$done_dir" 2>/dev/null || true
+    rm -rf "$run_base"
+  fi
 }
 trap cleanup EXIT
-trap 'exit 130' INT TERM
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 # The bundle: the committed skill, a copy carrying the candidate description,
-# or the skill in --skill-dir.
+# or the skill in --skill-dir, plus any --with-skills neighbors.
 build_bundle "$src" "$skill" "$ws/bundle" || exit 2
+for idx in "${!with_skills[@]}"; do
+  build_bundle "$repo/${with_rels[$idx]}" "${with_skills[$idx]}" "$ws/bundle" || exit 2
+done
 commit="$(git -C "$repo" rev-parse HEAD)" || exit 2
 tree=null
 if [ -n "$desc_file" ]; then
@@ -177,16 +228,17 @@ plugin="$(jq -n --arg c "$commit" --arg t "$tree" --arg s "$sha" \
 
 jq -n --arg pack "$pack" --arg skill "$skill" --argjson manual "$manual" --arg harness "$harness" \
   --arg hv "$harness_version" --arg model "$model" --argjson plugin "$plugin" --argjson runs "$runs" \
-  --argjson thr "$threshold" --argjson queries "$queries" --arg started "$(utc_now)" \
+  --argjson thr "$threshold" --argjson queries "$queries" --argjson with "$with_json" --arg started "$(utc_now)" \
   '{schema_version: 1, pack: $pack, skill: $skill, manual_only: ($manual == 1), harness: $harness,
     harness_version: (if $hv == "" then null else $hv end), model_flag: (if $model == "" then null else $model end),
-    plugin: $plugin, runs: $runs, threshold: $thr, queries: $queries, started_at: $started}' > "$ws/plan.json" || exit 2
+    plugin: $plugin, runs: $runs, threshold: $thr, queries: $queries, with_skills: $with, started_at: $started}' \
+  > "$ws/plan.json" || exit 2
 
-# One activation session. Stops the session as soon as the skill loads: a
-# trigger needs no more evidence, and the rest of the session is cost.
+# One activation session. Stops the session as soon as a skill loads: a
+# trigger (or cross-trigger) needs no more evidence, and the rest is cost.
 probe() { # $1 query index $2 run number $3 query text $4 fixture (may be empty)
   local qi="$1" k="$2" text="$3" fx="$4" rd="$ws/q$1/run-$2" base="$run_base/q$1/run-$2"
-  local wd stream err pid rc=0 ran=0 chain triggered=0 valid=0 reason="" setup=""
+  local wd stream err pid rc=0 ran=0 chain triggered=0 valid=0 reason="" setup="" seen_chain=""
   wd="$base/work"; stream="$rd/stream.ndjson"; err="$rd/stderr.log"
   mkdir -p "$rd" && : > "$stream" && : > "$err"
   if ! seed_workdir "$wd" "${fx:+$files_dir/$fx}"; then
@@ -196,8 +248,13 @@ probe() { # $1 query index $2 run number $3 query text $4 fixture (may be empty)
       printf '%s' "$setup_failed" > "$rd/setup"; exit "$r" ) &
     pid=$!
     while kill -0 "$pid" 2>/dev/null; do
-      if command -v pgrep >/dev/null 2>&1 && adapter_chain "$stream" 2>/dev/null | grep -qxF "$skill"; then
-        stop_tree "$pid"; break
+      if command -v pgrep >/dev/null 2>&1; then
+        seen_chain="$(adapter_chain "$stream" 2>/dev/null || true)"
+        if printf '%s\n' "$seen_chain" | grep -qxF "$skill"; then
+          stop_tree "$pid"; break
+        elif [ "${#with_skills[@]}" -gt 0 ] && [ -n "$seen_chain" ]; then
+          stop_tree "$pid"; break
+        fi
       fi
       sleep 0.2
     done
@@ -208,7 +265,7 @@ probe() { # $1 query index $2 run number $3 query text $4 fixture (may be empty)
   chain="$(adapter_chain "$stream" 2>/dev/null | awk 'NF && !seen[$0]++')"
   printf '%s\n' "$chain" | grep -qxF "$skill" && triggered=1
   adapter_ran "$stream" 2>/dev/null && ran=1
-  if [ "$triggered" -eq 1 ]; then
+  if [ "$triggered" -eq 1 ] || { [ "${#with_skills[@]}" -gt 0 ] && [ -n "$chain" ]; }; then
     valid=1
   elif [ -n "$reason$setup" ]; then
     reason="${reason:-$setup}"
@@ -229,25 +286,62 @@ probe() { # $1 query index $2 run number $3 query text $4 fixture (may be empty)
   rm -rf "$base"
 }
 
-launched=0
+# Sliding-window worker pool so a slow query never stalls idle slots.
+done_dir="$run_base/done"
+mkdir -p "$done_dir"
+have_wait_n=0
+if [ "${BASH_VERSINFO[0]:-0}" -gt 4 ] \
+   || { [ "${BASH_VERSINFO[0]:-0}" -eq 4 ] && [ "${BASH_VERSINFO[1]:-0}" -ge 3 ]; }; then
+  have_wait_n=1
+fi
+reap_finished() {
+  local alive=() entry pid slot_id
+  for entry in "${active_pids[@]+"${active_pids[@]}"}"; do
+    pid="${entry%%:*}"
+    slot_id="${entry#*:}"
+    if [ -f "$done_dir/$slot_id" ] || ! kill -0 "$pid" 2>/dev/null; then
+      wait "$pid" 2>/dev/null || true
+      rm -f "$done_dir/$slot_id"
+    else
+      alive+=("$pid:$slot_id")
+    fi
+  done
+  active_pids=("${alive[@]+"${alive[@]}"}")
+}
+slot=0
 while IFS= read -r q; do
   qi="$(jq -r .index <<< "$q")"; text="$(jq -r .query <<< "$q")"
   qfx="$(jq -r --arg d "$fixture" '.fixture // $d' <<< "$q")"
   for k in $(seq 1 "$runs"); do
-    probe "$qi" "$k" "$text" "$qfx" &
-    launched=$((launched + 1))
-    [ $((launched % jobs)) -eq 0 ] && wait
+    while [ "${#active_pids[@]}" -ge "$jobs" ]; do
+      reap_finished
+      [ "${#active_pids[@]}" -ge "$jobs" ] || break
+      if [ "$have_wait_n" -eq 1 ]; then wait -n 2>/dev/null || true; else sleep 0.1; fi
+      reap_finished
+    done
+    slot=$((slot + 1))
+    _trig_done_marker="$done_dir/$slot"
+    (
+      trap - EXIT INT TERM
+      trap ': > "$_trig_done_marker"' EXIT
+      probe "$qi" "$k" "$text" "$qfx"
+    ) &
+    active_pids+=("$!:$slot")
   done
 done < <(jq -c '.[]' <<< "$queries")
-wait
+for entry in "${active_pids[@]+"${active_pids[@]}"}"; do
+  wait "${entry%%:*}" 2>/dev/null || true
+done
+active_pids=()
+rm -rf "$done_dir"
 
 evalkit triggering "$ws" || exit 2
-jq -r '.[] | "  \(.verdict | ascii_upcase | .[0:12] | . + (" " * (12 - length))) \(if .should_trigger then "+" else "-" end) rate=\(.rate // "-") (\(.triggered_runs)/\(.valid_runs))  [\(.split)] \(.query[0:68])"' \
+jq -r '.[] | "  \(.verdict | ascii_upcase | .[0:12] | . + (" " * (12 - length))) \(if .should_trigger then "+" else "-" end) rate=\(.rate // "-") (\(.triggered_runs)/\(.valid_runs))\(if ((.other_skills // {}) | length) > 0 then " other=" + ((.other_skills | to_entries | map("\(.key):\(.value)") | join(","))) else "" end)  [\(.split)] \(.query[0:68])"' \
   "$ws/query-results.json" >&2
 jq -r '.splits | to_entries[] | "  \(.key): \(.value.passed)/\(.value.queries) passed, pass_rate=\(.value.pass_rate // "-"), inconclusive=\(.value.inconclusive)"' \
   "$ws/triggering.json" >&2
 log "workspace: $ws"
-[ -n "$desc_file$skill_dir" ] || log "record it with: evals/bin/report $ws"
+[ -n "$desc_file$skill_dir" ] || [ "${#with_skills[@]}" -gt 0 ] || log "record it with: evals/bin/report $ws"
 if [ "$print_json" -eq 1 ]; then cat "$ws/triggering.json"; else printf '%s\n' "$ws/triggering.json"; fi
 jq -e 'all(.[]; .verdict == "pass")' "$ws/query-results.json" >/dev/null || exit 1
 exit 0

@@ -70,6 +70,43 @@ EOF
 refute "antigravity: ERROR result with 0 turns is not a model turn" with_adapter antigravity adapter_ran "$TL_TMP/agy-auth-err.ndjson"
 check "antigravity: authentication error is detected as a refusal" \
   with_adapter antigravity lab_refusal "$TL_TMP/agy-auth-err.ndjson" /dev/null
+
+# --- refusal: provider errors, not the agent's text or tool output -----------
+cat > "$TL_TMP/cc-content.ndjson" <<'EOF'
+{"type":"assistant","message":{"role":"assistant","model":"m","content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"psql -U postgres -c 'select 1'"}}]}}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"FATAL:  Peer authentication failed for user \"postgres\""}]}}
+{"type":"assistant","message":{"role":"assistant","model":"m","content":[{"type":"text","text":"The code now has a usage limit and a rate limit."}]}}
+{"type":"result","subtype":"success","is_error":false,"num_turns":2,"result":"Added a rate limit; quota exceeded errors return 429."}
+EOF
+refute "claude-code: the agent's text and tool output are not a refusal" \
+  with_adapter claude-code lab_refusal "$TL_TMP/cc-content.ndjson" /dev/null
+printf '%s\n' '{"type":"result","subtype":"success","is_error":true,"num_turns":0,"result":"Claude AI usage limit reached|1767000000"}' > "$TL_TMP/cc-limit.ndjson"
+check "claude-code: an error result is a refusal" \
+  with_adapter claude-code lab_refusal "$TL_TMP/cc-limit.ndjson" /dev/null
+printf '%s\n' '{"type":"assistant","message":{"role":"assistant","model":"<synthetic>","content":[{"type":"text","text":"API Error: rate limit exceeded"}]}}' > "$TL_TMP/cc-synthetic.ndjson"
+check "claude-code: a synthetic error message is a refusal" \
+  with_adapter claude-code lab_refusal "$TL_TMP/cc-synthetic.ndjson" /dev/null
+cat > "$TL_TMP/codex-content.ndjson" <<'EOF'
+{"type":"item.completed","item":{"id":"i1","type":"command_execution","command":"psql","aggregated_output":"authentication failed","exit_code":2,"status":"completed"}}
+{"type":"item.completed","item":{"id":"i2","type":"agent_message","text":"Added a rate limit."}}
+{"type":"turn.completed","usage":{"input_tokens":5,"output_tokens":5}}
+EOF
+refute "codex: the agent's text and tool output are not a refusal" \
+  with_adapter codex lab_refusal "$TL_TMP/codex-content.ndjson" /dev/null
+printf '%s\n' '{"type":"turn.failed","error":{"message":"You have hit your usage limit."}}' > "$TL_TMP/codex-failed.ndjson"
+check "codex: a failed turn is a refusal" with_adapter codex lab_refusal "$TL_TMP/codex-failed.ndjson" /dev/null
+printf '%s\n' '{"type":"item.completed","item":{"id":"i3","type":"error","message":"stream error: rate limit"}}' > "$TL_TMP/codex-error-item.ndjson"
+check "codex: an error item is a refusal" with_adapter codex lab_refusal "$TL_TMP/codex-error-item.ndjson" /dev/null
+cat > "$TL_TMP/agy-content.ndjson" <<'EOF'
+{"event":"step_update","step_update":{"conversation_id":"c1","step_index":1,"state":"DONE","step_type":"agent_response","text_delta":"Added a rate limit."}}
+{"event":"result","result":{"conversation_id":"c1","status":"SUCCESS","response":"Added a rate limit.","num_turns":1,"usage":{"output_tokens":5}}}
+EOF
+refute "antigravity: the agent's text is not a refusal" \
+  with_adapter antigravity lab_refusal "$TL_TMP/agy-content.ndjson" /dev/null
+printf 'error: usage limit reached\n' > "$TL_TMP/plain-limit.txt"
+check "a plain-text stream line is still checked" with_adapter claude-code lab_refusal "$TL_TMP/plain-limit.txt" /dev/null
+check "a refusal on stderr is still detected" with_adapter claude-code lab_refusal "$TL_TMP/cc-content.ndjson" "$TL_TMP/plain-limit.txt"
+refute "a missing stream and log are no refusal" with_adapter claude-code lab_refusal "$TL_TMP/no-such-stream" "$TL_TMP/no-such-log"
 : > "$TL_TMP/empty.ndjson"
 printf 'not json\n{"type":"assistant"\n' > "$TL_TMP/garbage.ndjson"
 for h in "${HARNESSES[@]}"; do

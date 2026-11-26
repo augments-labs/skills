@@ -4,180 +4,112 @@
 deterministic hooks for coding agents, built on the open Agent Skills standard
 (`agentskills.io`).
 
-Every rule here rests on two principles:
+Two core principles:
 
 1. **Mechanical invariants belong in hooks; non-obvious judgment belongs in
    skills.** Never add prompt prose to compensate for a missing deterministic
    check.
-2. **A claim about agent behavior leaves through an eval record, never through
-   confidence.** A skill stays promoted only while measured 3-arm evals show a
-   real gain over no skill on current frontier models without regressing simple
-   control tasks.
+2. **Every promoted skill earns its place with measured evals.** A skill stays
+   promoted only while `skill` vs `none` evals show a real gain on current
+   models without regressing simple control tasks.
 
-## Repository layout and naming
+## Repository layout
 
-Use `<pack>` for source folders (`engineering`, future `games`) and `<plugin>`
-for generated plugin bundles (`engineering-skills`, future `roblox-skills`):
-
-- `skills/<pack>/<name>/`: canonical promoted skills. Edit here; never
-  hand-edit generated bundles.
-- `skills/in-progress/<name>/`: staging area for unpromoted skills being
-  authored and evaluated. It is excluded from all plugin bundles and releases.
-- `skills/deprecated/<name>/`: retired skills that models outgrew, kept with
-  the eval record proving zero delta.
+- `skills/<pack>/<name>/`: canonical promoted skills. Edit here; never hand-edit
+  `plugins/`.
+- `skills/in-progress/<name>/`: optional staging area for unpromoted skills.
+  Excluded from plugin bundles.
+- `skills/deprecated/<name>/`: optional archive for retired skills.
 - `hooks/<pack>/`: pack-scoped deterministic hook logic and harness adapters.
-  Hooks stay isolated per pack and never leak across packs.
-- `plugins/<plugin>/`: generated, self-contained per-pack bundles built by
-  `bash scripts/sync-plugins.sh`. Never edit files under `plugins/` by hand.
-- `evals/`: monorepo 3-arm and triggering eval harness (`evals/bin/`), test
-  cases (`evals/<pack>/<name>/`), and compact committed summaries
-  (`evals/results/`). `evals/` never ships inside `plugins/<plugin>/`, and
-  `evals/workspaces/` is gitignored.
-- `docs/`: user documentation in plain second person. Contributor and
-  maintainer internals go in `CONTRIBUTING.md`.
+- `plugins/<plugin>/`: generated self-contained per-pack bundles built by
+  `bash scripts/sync-plugins.sh` for all 11 supported harnesses (Claude Code,
+  Codex CLI, Antigravity, Cursor, Devin, Grok Build, Kimi Code, Muse Code,
+  Hermes, OpenCode 2.x, pi) plus `npx skills add`. Never hand-edit `plugins/`.
+- `evals/`: eval harness (`evals/bin/`), test cases (`evals/<pack>/<name>/`),
+  and one compact committed summary per skill (`evals/results/<pack>/<name>.json`).
+  `evals/` never ships inside `plugins/`, and `evals/workspaces/` is gitignored.
+- `docs/`: user documentation in plain, natural second-person English (avoid em
+  dashes). Maintainer notes go in `CONTRIBUTING.md`.
 
-Edit `AGENTS.md`, never `CLAUDE.md` or `GEMINI.md` (`CLAUDE.md` and `GEMINI.md`
-are symlinks to `AGENTS.md`).
+Edit `AGENTS.md`, never `CLAUDE.md` or `GEMINI.md` (both are symlinks to
+`AGENTS.md`).
 
 ## Branching and releases
 
-- **`dev` is the integration branch, and nobody commits to it directly.** Cut
-  your own branch from `dev` (for example `task/<topic>`), push it, and open a
-  PR into `dev`. This applies to agents and maintainers too. Never commit or
-  push to `dev` or `main`; branch protection rejects it. The `release/`,
-  `hotfix/`, and `backmerge/` prefixes are reserved for maintainers (see
-  `RELEASING.md`).
-- **PRs into `dev` are squash-merged** once the required checks pass. GitHub
-  deletes the head branch after the merge. Delete any branch it leaves behind
-  once its PR is merged or closed.
-- **`main` receives releases and hotfixes only.** Normal releases merge
-  `dev -> main` as a merge commit. Hotfixes branch `hotfix/<topic>` from `main`,
-  merge to `main`, tag a patch version, and immediately back-merge `main -> dev`
-  as a merge commit (never squash).
-- **Never bump versions or add `CHANGELOG.md` version headings** in an ordinary
-  contribution PR. See `RELEASING.md`.
+- **`dev` is the integration branch.** Cut a branch from `dev` (for example
+  `task/<topic>`), push it, and open a PR into `dev`. Never commit or push
+  directly to `dev` or `main`.
+- **PRs into `dev` are squash-merged.**
+- **`main` receives releases and hotfixes only** (see `RELEASING.md`). Never
+  bump versions or add `CHANGELOG.md` version headings in ordinary PRs.
 
-## Authoring rules (non-negotiable)
+## Authoring rules
 
 Files under `skills/`, `hooks/`, `plugins/`, and `docs/` ship to users.
 
-1. **Agent Skills standard first.** Every skill directory contains `SKILL.md`
-   with a double-quoted `description` (1 to 1,024 characters) and a kebab-case
-   `name` matching its directory. Prefer gerund/activity names such as
-   `debugging`, `verifying-before-completion`, `changing-a-live-schema`,
-   `finishing-a-branch`, and `reviewing-code`. They clearly express the activity
-   and avoid colliding with short built-in harness commands like `review`,
-   `simplify`, `plan`, `help`, `clear`, and `compact`. A skill directory may also contain optional
-   `scripts/`, `references/`, and `assets/`. User-invoked workflows carry
-   `disable-model-invocation: true` plus explicit manual-only wording in
-   `description`. Never declare inline `hooks` in `SKILL.md` frontmatter.
-2. **Strict, mathematically consistent size ceilings.** Every promoted
-   `SKILL.md` body is at most 200 lines, 2,000 estimated tokens, and 8,000
-   bytes (`ceil(8000 / 4) == 2000`). The target is 80 to 150 lines. Per pack,
-   auto-triggered descriptions stay within 3,400 characters, user-invoked
-   descriptions within 2,400 characters, and combined descriptions within
-   5,800 characters.
-3. **Zero library bureaucracy.** Never invent hidden metadata directories,
-   append-only custom ledgers, hash-identity formulas, or verbose
-   fill-in-every-section templates. Bind evidence to native artifacts (git
-   commits, raw check output, tests, PR descriptions).
-4. **Zero shouting and zero silent chaining.** No `<EXTREMELY-IMPORTANT>`
-   banners and no multi-row rationalization tables unless a 3-arm eval proves
-   they improve outcomes. User-invoked skills may invoke auto-triggered
-   primitives, but never another user-invoked workflow.
+1. **Agent Skills standard.** Every skill directory contains `SKILL.md` with a
+   double-quoted `description` (1 to 1,024 chars) and a kebab-case `name`
+   matching its directory. Prefer gerund or activity names (`debugging`,
+   `finishing-a-branch`, `reviewing-code`) that avoid built-in slash commands
+   (`review`, `simplify`, `plan`, `help`, `clear`, `compact`). User-invoked
+   workflows set `disable-model-invocation: true` plus explicit manual-only
+   wording in `description`. Never declare inline `hooks` in `SKILL.md`.
+2. **Size ceilings.** Every promoted `SKILL.md` body is at most 200 lines,
+   2,000 approx tokens, and 8,000 bytes (target 80 to 150 lines). Per pack,
+   auto-triggered descriptions stay within 3,400 chars, user-invoked within
+   2,400 chars, and combined within 5,800 chars.
+3. **Zero library bureaucracy.** No hidden metadata directories, custom ledgers,
+   or fill-in-every-section templates. Bind evidence to native artifacts (git
+   commits, command output, tests, PR descriptions).
+4. **No shouting or silent chaining.** No `<EXTREMELY-IMPORTANT>` banners.
+   User-invoked skills may invoke auto-triggered primitives, never another
+   user-invoked workflow.
 5. **No external references.** Never name other repositories, projects,
-   articles, authors, benchmarks, or issue/PR numbers in `skills/`, `hooks/`,
-   `plugins/`, `docs/`, commit messages, PR descriptions, or release notes
-   (outside `README.md`'s Acknowledgements section and the PR template's
-   `Related` line). State the engineering principle directly.
+   articles, authors, benchmarks, or issue/PR numbers in shipped files, commits,
+   PR descriptions, or release notes (outside `README.md` Acknowledgements and
+   the PR template `Related` line).
 6. **Model- and harness-agnostic.** Inside `skills/`, `hooks/`, `plugins/`, and
-   `docs/`, name capability tiers (`small | medium | large`), never vendor model
-   names. Eval records under `evals/results/` and `README.md`'s scoreboard
-   record exact tested model IDs. Keep harness tool names inside adapters,
-   never inside `SKILL.md`.
+   `docs/`, use capability tiers (`small | medium | large`), never vendor model
+   names. Keep harness tool names in adapters, not `SKILL.md`. (`evals/results/`
+   and the `README.md` scoreboard record tested model IDs.)
 7. **No `docs/` links inside skills.** `docs/` does not ship in plugin bundles.
 8. **Support-file discipline.** Every line in `SKILL.md` naming a file under
    `references/` or `assets/` must include a load condition (`when`, `if`,
    `before`, `after`). Reference depth is at most 1.
 9. **Zero third-party runtime dependencies** in skills, hooks, adapters, and
-   core scripts.
+   scripts.
 
-## Evals and promotion
+## Evals and config security
 
 - **Never launch live LLM evals in CI** and never commit `evals/workspaces/`,
-  raw transcripts, or secrets. Agents may run offline suites (`evals/bin/check`)
-  and `--dry-run` only, unless the maintainer explicitly asks for a live run.
-- **Hold hooks constant during skill evals.** Skill 3-arm runs (`full`,
-  `distilled`, `none`) run with hooks disabled across all arms, so skill deltas
-  are not confounded with hook enforcement. Hooks have their own deterministic
-  and live tests.
-- **Staging vs promoted:**
-  - Skills in `skills/in-progress/` may be authored and iterated without an eval
-    record.
-  - Promoting a skill into `skills/<pack>/`, or editing any file of a promoted
-    skill (`SKILL.md`, `scripts/`, `references/`, or `assets/`), requires
-    matching committed records under `evals/results/` named via
-    `Eval record: evals/results/<dir>` in the PR body.
-    `scripts/check-eval-record.sh` reads every named record at the PR head and
-    needs one passing record of each kind for every touched skill:
-    - **`triggering.json`:** `plugin.skill_tree` and
-      `plugin.description_sha256` match the shipped skill, `>= 3` runs, and
-      passing `train`, `validation`, and `holdout` splits with zero failed or
-      inconclusive queries. Explicit user-invoked skills
-      (`disable-model-invocation: true`) are exempt from positive-triggering
-      splits, but MUST pass a `negative` split on spec-only harnesses proving
-      they do not self-fire on routine prompts.
-    - **`benchmark.json`:** hooks disabled and `arms.<shipped_arm>.skill_tree`
-      matching the shipped tree (`full` or `distilled` against `none` for
-      promotions; `full` against `old_skill` and `none` for edits to promoted
-      skills), with `>= 3` scored runs per eval case in every arm across
-      realistic multi-file tasks plus denominator-safe anti-ceremony controls
-      against `none` (non-triggering trivial tasks: 0 skill loads, 0
-      unrequested files, `<= +1` tool call; small in-scope fixes: 0 regression,
-      `<= +2` tool calls, `<= +1` turn, `<= 1.5x` output tokens), zero
-      indeterminate runs, and zero `needs_review` assertions. `distilled` ships
-      only when it beats `none` by `>= 0.20` and `full` adds `< 0.10`.
-  - **Security separation of config:** Human hook bypasses and external CLI
-    commands (such as cross-model review commands) live strictly in user-global
-    config outside the repository (`~/.config/augments-skills/`), never in
-    repo-local `.augments-labs-config.json`. Hooks MUST also block writes to
-    `~/.config/augments-skills/`.
-  - **Anti-gaming rule:** Any PR that modifies both `evals/<pack>/<name>/**`
-    (assertions, queries, fixtures, verifiers, or `distilled/SKILL.md`) and
-    `skills/<pack>/<name>/` fails CI unless a maintainer applies the
-    `eval-assertion-reviewed` label.
-  - **Self-attestation rule:** A PR that changes `.github/workflows/eval-record.yml`
-    or `scripts/check-eval-record.sh` cannot attest its own skill change. Split
-    it into two PRs, or verify with `dev`'s copy of
-    `scripts/check-eval-record.sh`.
-  - **Exemptions:** Typos, removals, or moves between folders require the
-    maintainer-applied `no-eval` label; without it, a skill removed from its
-    pack needs one named, valid record for it. Changes outside promoted skill
-    directories rely on deterministic offline tests.
+  raw transcripts, or secrets. Agents run offline suites (`evals/bin/check`) and
+  `--dry-run` unless the user asks for a live run.
+- **Hold hooks off during skill evals** so skill deltas are not confounded with
+  hooks.
+- **Per-skill eval records:** Promoting or editing a skill under
+  `skills/<pack>/<name>/` requires an updated, passing record at
+  `evals/results/<pack>/<name>.json` (written by `evals/bin/report`, overwritten
+  in place so git tracks history). `scripts/check-eval-record.sh` checks that
+  `skill_tree`, `description_sha256`, and `manual_only` match `SKILL.md` at head
+  and that at least one measured model passes benchmark controls (`>= 3` runs/case,
+  0 indeterminate/needs_review) and triggering (`>= 3` runs, 0 inconclusive).
+  Typos and removals can use the `no-eval` label.
+- **Config trust boundary:** Human hook bypasses and external commands live only
+  in `~/.config/augments-skills/`, never in repo-local `.augments-labs-config.json`.
+  Hooks must block writes to `~/.config/augments-skills/`.
 
 ## Checks before committing
 
-Run these before committing. CI enforces them on every push and PR:
-
 ```bash
 bash scripts/validate.sh --strict
-bash scripts/token-budget.sh --check
-bash scripts/validate-trigger-collisions.sh --strict
 bash evals/bin/check
 ```
 
-After editing any promoted skill or hook, run `bash scripts/sync-plugins.sh` so
-`plugins/<plugin>/` stays synchronized.
+After editing any promoted skill or hook, run `bash scripts/sync-plugins.sh`.
 
-## Opening, reviewing, and merging PRs
+## Opening and merging PRs
 
-1. Fill every section of `.github/PULL_REQUEST_TEMPLATE.md` truthfully. Identify
-   who orchestrated the change, every model that wrote any part of it, and the
-   harness and its version.
-2. Search both open and closed PRs and issues before opening a PR.
-3. Review the complete diff at the head commit and report findings under
-   *Authoring & Review Disclosure*. Tick the human-review box only when the
-   named person actually read the diff at that commit.
-4. Only a maintainer (or an agent explicitly authorized by a maintainer for that
-   PR) may merge or close a PR, and only when every gating CI check is green on
-   the current head commit.
+1. Fill `.github/PULL_REQUEST_TEMPLATE.md` truthfully, noting orchestrator,
+   model(s), harness, and diff review findings.
+2. Only a maintainer (or an explicitly authorized agent) may merge or close a
+   PR, and only when gating CI checks are green on head.

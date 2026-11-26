@@ -22,6 +22,9 @@ fresh() {
     if [ -f "$f" ]; then printf '%s\n' "$f"; fi
   done | tar -cf - -T -) | tar -xf - -C "$work"
   (cd "$work" && git init -q)
+  # Strip the repo README token-budget block so sync tests adding temporary
+  # skills do not fail the real README's token-budget parity check.
+  printf '# Fixture\n' > "$work/README.md"
 }
 
 run() { (cd "$work" && bash "$@" >"$tmp/out" 2>&1); }
@@ -35,8 +38,8 @@ expect_fail() { # description, pattern, command...
 
 skill() { # dir, name, body
   mkdir -p "$work/$1"
-  printf -- '---\nname: %s\ndescription: "Sample %s skill. Use when testing plugin sync. Skip real work."\n---\n\n# Sample\n\n%s\n' \
-    "$2" "$2" "$3" > "$work/$1/SKILL.md"
+  printf -- '---\nname: %s\ndescription: "Sample %s skill. Use when testing %s sync. Skip real work."\n---\n\n# Sample\n\n%s\n' \
+    "$2" "$2" "$2" "$3" > "$work/$1/SKILL.md"
 }
 
 plugin_dir() { printf '%s/plugins/engineering-skills' "$work"; }
@@ -52,8 +55,8 @@ mkdir -p "$work/skills/engineering/sample-skill/references"
 echo "# Notes" > "$work/skills/engineering/sample-skill/references/notes.md"
 skill skills/in-progress/wip-skill wip-skill "Work in progress."
 skill skills/deprecated/old-skill old-skill "Retired."
-mkdir -p "$work/evals/engineering/sample-skill/distilled" "$work/hooks/engineering/lib" "$work/hooks/engineering/config" "$work/hooks/engineering/tests"
-cp "$work/skills/engineering/sample-skill/SKILL.md" "$work/evals/engineering/sample-skill/distilled/SKILL.md"
+mkdir -p "$work/evals/engineering/sample-skill" "$work/hooks/engineering/lib" "$work/hooks/engineering/config" "$work/hooks/engineering/tests"
+echo '{"evals": []}' > "$work/evals/engineering/sample-skill/evals.json"
 echo 'echo check' > "$work/hooks/engineering/lib/check.sh"
 echo '{"hooks": {}}' > "$work/hooks/engineering/config/claude-code.json"
 echo '{"hooks": {}}' > "$work/hooks/engineering/config/codex.json"
@@ -81,14 +84,16 @@ def load(path):
     with open(path) as f:
         return json.load(f)
 m = {d: load(f"{root}/{d}/plugin.json") for d in (".claude-plugin", ".codex-plugin", ".antigravity-plugin",
-     ".grok-plugin", ".kimi-plugin", ".muse-plugin")}
+     ".cursor-plugin", ".devin-plugin", ".grok-plugin", ".kimi-plugin", ".muse-plugin")}
 for d, j in m.items():
     assert j["name"] == "engineering-skills" and "email" not in json.dumps(j), d
 c = m[".codex-plugin"]
 assert c["skills"] == "./skills/" and c["hooks"] == "./hooks/codex-hooks.json", c
-# Grok Build would otherwise load hooks/hooks.json; Kimi Code gets no hooks entry.
+# Cursor and Grok Build would otherwise load hooks/hooks.json; Kimi Code and Devin get no hooks entry.
+assert m[".cursor-plugin"]["skills"] == "./skills/" and m[".cursor-plugin"]["hooks"] == {}, m[".cursor-plugin"]
 assert m[".grok-plugin"]["skills"] == "./skills/" and m[".grok-plugin"]["hooks"] == [], m[".grok-plugin"]
 assert m[".kimi-plugin"]["skills"] == ["./skills/"] and "hooks" not in m[".kimi-plugin"], m[".kimi-plugin"]
+assert "hooks" not in m[".devin-plugin"], m[".devin-plugin"]
 mu = m[".muse-plugin"]
 assert mu["compat"] == {"source": "native", "manifestDir": ".muse-plugin"}, mu
 names = sorted(os.listdir(root + "/skills"))

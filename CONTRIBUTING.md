@@ -1,65 +1,30 @@
 # Contributing to Augments Labs Skills
 
-Thank you for contributing. This guide is written for people; coding agents read
-[`AGENTS.md`](AGENTS.md), which encodes the same rules as direct instructions.
+Thanks for contributing. Shared authoring rules, size caps, and branching
+conventions live in [`AGENTS.md`](AGENTS.md); this guide covers the practical
+workflow for contributors.
 
-## Before you start
+## Workflow
 
-- **Solve a real failure.** Name the concrete mistake, production footgun, or
-  contract gap the change addresses. "It could theoretically help" is not enough.
-- **Search open and closed issues and PRs first.**
-- **Respect pack boundaries.** General engineering skills live in
-  `skills/engineering/` and bundle into `plugins/engineering-skills/`; future
-  domain packs live in their own `skills/<pack>/` and `plugins/<plugin>/`. Every
-  new skill starts in `skills/in-progress/` until its evals pass.
-- **"No skill is needed here" and retiring a skill are valid outcomes.**
-
-## Branching and making a change
-
-1. Fork or clone the repository and create your own branch from `dev`, for
-   example `task/<topic>`. Never commit or push to `dev` or `main` directly;
-   branch protection rejects it. `main` is reserved for releases and hotfixes,
-   and the `release/`, `hotfix/`, and `backmerge/` prefixes are reserved for
-   maintainers.
-2. Open your pull request against `dev`. It is squash-merged once the required
-   checks pass, and a branch in this repository is deleted automatically after
-   the merge. On a fork, delete your branch yourself.
-3. Keep one logical change per pull request.
-4. Edit canonical sources under `skills/<pack>/` or `hooks/<pack>/`, never the
-   generated plugin bundles under `plugins/<plugin>/`. Run
-   `bash scripts/sync-plugins.sh` after editing promoted skills or hooks.
-5. Follow the authoring rules in [`AGENTS.md`](AGENTS.md): strict Agent Skills
-   conformance, gerund/activity kebab-case names (`debugging`,
-   `verifying-before-completion`, `changing-a-live-schema`, `finishing-a-branch`,
-   `reviewing-code`) with no
-   built-in slash-command shadowing (e.g., `review`, `simplify`, `plan`), body
-   size caps (`<= 200` lines / `<= 2,000` tokens / `<= 8,000` bytes), per-pack
-   description caps (`<= 3,400` auto / `<= 2,400` user / `<= 5,800` combined),
-   no custom metadata ledgers, no external references, no vendor model names in
-   shipped content, and zero third-party runtime dependencies.
-6. Keep `docs/` strictly for user documentation in plain second person. Put
-   maintainer internals, adapter quirks, and test notes here in
-   `CONTRIBUTING.md`.
-7. Never bump versions or add `CHANGELOG.md` version headings in an ordinary
-   contribution PR (see [`RELEASING.md`](RELEASING.md)).
-
-## Running deterministic checks
-
-Run locally before pushing (CI runs the same gates):
+1. Branch from `dev` (for example `task/<topic>`) and open your PR against
+   `dev`. Never commit directly to `dev` or `main`, and do not bump versions or
+   `CHANGELOG.md` headings in ordinary PRs (see [`RELEASING.md`](RELEASING.md)).
+2. Edit canonical sources under `skills/<pack>/` or `hooks/<pack>/`, never the
+   generated bundles under `plugins/<plugin>/`. Run `bash scripts/sync-plugins.sh`
+   after changing promoted skills or hooks.
+3. Run the deterministic checks before pushing (CI runs the same gates):
 
 ```bash
 bash scripts/validate.sh --strict
-bash scripts/token-budget.sh --check
-bash scripts/validate-trigger-collisions.sh --strict
 bash evals/bin/check
 ```
 
-`scripts/validate.sh` also runs `bash scripts/sync-plugins.sh --check`, which
-fails when `plugins/<plugin>/` differs from what `skills/<pack>/` and
-`hooks/<pack>/` produce, and a dangling-reference check: promoted and
-in-progress skills may name only promoted skills, and only support files that
-exist inside the skill. To run these checks on every relevant commit, install
-the optional pre-commit hook (`--remove` undoes it):
+`scripts/validate.sh --strict` checks frontmatter, size ceilings, token budgets
+(including the README table), cross-skill trigger collisions, dangling
+references, and `scripts/sync-plugins.sh --check`.
+
+To run these automatically on commit, install the optional pre-commit hook
+(`--remove` undoes it):
 
 ```bash
 bash scripts/install-git-hooks.sh
@@ -67,150 +32,84 @@ bash scripts/install-git-hooks.sh
 
 ## Evaluations (`evals/`)
 
-All behavior and triggering evaluations live in `evals/` at the repository root
-so eval cases stay in lockstep with the skills they test, while remaining
-excluded from all generated plugin bundles under `plugins/`.
+All behavior and triggering evals live under `evals/` and never ship in
+`plugins/`. See [`evals/README.md`](evals/README.md) for commands and schemas.
 
-- **Staging (`skills/in-progress/`):** Iterate freely without blocking CI.
-- **Hooks held constant:** Skill eval runs disable hooks across every arm
-  (`full`, `distilled`, `none`) so skill deltas are never confounded with hook
-  enforcement. Hooks have their own unit and live tests.
-- **Multi-turn cases:** A case may add `followups`, a list of messages sent
-  in order into the same session after its prompt, and is graded on the final
-  work tree (see `evals/README.md`). Measure such a case on a harness that
-  sends follow-ups: on any other, its runs are indeterminate
-  (`followups_unsupported`), and a record needs zero indeterminate runs.
-- **Promotion (`skills/in-progress/` -> `skills/<pack>/`):** Requires:
-  1. A **3-arm behavior benchmark** (`full`, `distilled`, `none`) with `>= 3`
-     scored runs per eval case across realistic multi-file adversarial tasks
-     plus denominator-safe anti-ceremony controls (non-triggering trivial tasks:
-     0 skill loads, 0 unrequested files, `<= +1` tool call; small in-scope
-     fixes: 0 regression, `<= +2` tool calls, `<= +1` turn, bounded output
-     tokens), zero indeterminate runs, and zero assertions awaiting review.
-     `arms.<shipped_arm>.skill_tree` matches the **shipped arm** (`full` or
-     `distilled`). Ship `distilled` only when it beats `none` by `>= 0.20`,
-     passes the controls, and `full` adds `< 0.10` over it.
-  2. A **triggering record** whose `plugin.skill_tree` and
-     `plugin.description_sha256` match the shipped skill (`train` /
-     `validation` / `holdout` splits, `>= 3` runs, zero failed or inconclusive
-     queries) for **auto-triggered skills**. Explicit user-invoked skills
-     (`disable-model-invocation: true`) are exempt from positive-triggering
-     splits, but MUST pass a `negative` split on spec-only harnesses
-     confirming they do not self-fire on routine prompts.
-- **Editing a promoted skill:** A change to any file under
-  `skills/<pack>/<name>/`, `scripts/` included, requires both records again,
-  measured on the edited tree: a before/after benchmark (`full` vs
-  `old_skill`, plus `none` for the controls) and a triggering record, named as
-  `Eval record: evals/results/<dir>` in the PR body.
-- **Anti-gaming & self-attestation:** Changes to `evals/<pack>/<name>/**`
-  (assertions, queries, fixtures, verifiers, or `distilled/SKILL.md`) should
-  land separately from skill edits; touching both in one PR fails CI unless a
-  maintainer applies `eval-assertion-reviewed`. A PR editing
-  `.github/workflows/eval-record.yml` or `scripts/check-eval-record.sh` cannot
-  attest its own skill edit.
-- **Retirement:** When a newer frontier model closes the gap (`shipped - none`
-  drops to noise), move the skill to `skills/deprecated/` and name the eval
-  record that shows it in the PR body (or get the `no-eval` label).
-- **Never commit `evals/workspaces/` or raw transcripts**, and **never run live
-  models in CI**.
+- **Staging:** Draft new skills in `skills/in-progress/<name>/` and iterate
+  freely before promoting.
+- **Promotion or edits:** Any change under `skills/<pack>/<name>/` requires an
+  updated `evals/results/<pack>/<name>.json` written by `evals/bin/report`,
+  matching the skill's git tree and description hash with at least one model
+  passing behavior controls (`>= 3` runs/case) and triggering (`>= 3` runs).
+  Each skill keeps one compact JSON file overwritten in place; git history keeps
+  older runs. Typos and non-behavioral fixes can use the `no-eval` label.
+- **Neighbor routing checks:** When adding or editing an auto-triggered skill
+  whose triggers could overlap with another skill, run a fast 1-turn routing
+  check with `evals/bin/triggering --with-skills <neighbor>` instead of
+  re-running full behavioral sessions for unchanged skills.
+- **No live models in CI:** Never commit `evals/workspaces/` or transcripts. CI
+  runs `evals/bin/check` (syntax + `fake-cli` offline tests) only.
 
-## Multi-harness adapters
+## Multi-harness packaging
 
-Every harness installs from a generated, self-contained per-pack bundle under
-`plugins/<plugin>/`, which carries one manifest per harness. Marketplace
-harnesses (Claude Code, Codex, Grok Build, Muse Code) find the bundles through
-root marketplace manifests. Installs of the repository root itself (pi, Kimi
-Code, OpenCode, a Grok install of the repository) load the root pack,
-`root_pack` in `scripts/sync-plugins.sh` (`engineering`), through root entry
-points: `package.json` (`pi.skills`) and `index.js` are hand-written and
-checked by the sync, while `.kimi-plugin/plugin.json` and
-`.grok-plugin/{plugin,marketplace}.json` are generated. Every other pack
-installs from its own bundle. A new pack needs a `pack_meta` case in
-`scripts/sync-plugins.sh` and an entry in both `.claude-plugin/marketplace.json`
-and `.agents/plugins/marketplace.json`.
+Every harness installs from a generated per-pack bundle under `plugins/<plugin>/`
+(or a root entry point pointing into it). Keeping canonical skills under
+`skills/<pack>/<name>/` and generating flat bundles under `plugins/<plugin>/`
+keeps staging drafts, evaluation files, and separate domain packs out of user
+installs.
 
-Because tool names, `stdin` schemas, and deny protocols differ across harnesses
-(for example, `Bash`/`Edit`/`Write` with `exit 2` vs `apply_patch` vs
-`run_command` with JSON `decision: "deny"`), hook enforcement uses thin
-per-harness adapters over shared check logic rather than assuming one universal
-hook schema.
-
-| Harness | Packaging surface | Known constraints |
+| Harness | Packaging surface | Notes |
 | --- | --- | --- |
-| Claude Code | `.claude-plugin/marketplace.json` -> `plugins/<plugin>/` | Strict `marketplace.json` owner schema (`name`, optional `email`, no `url`); discovers `skills/` and `hooks/hooks.json` at the plugin root; `PreToolUse`/`PostToolUse` hooks |
-| Codex CLI | `.agents/plugins/marketplace.json` -> `plugins/<plugin>/` | Manifest names component paths (`skills`, `hooks` -> `hooks/codex-hooks.json`); installs into `$CODEX_HOME/plugins/cache/`; edits use `apply_patch` |
-| Antigravity | `plugins/<plugin>/.antigravity-plugin/plugin.json` | Reads components from the plugin root only: hooks from root `hooks.json` (one named entry per hook; commands run in the plugin folder, and older builds do not set `${PLUGIN_ROOT}`), never `.antigravity-plugin/rules/` or `hooks/hooks.json`; check with `agy plugin validate --json` |
-| OpenCode 2.x | Root `index.js` -> `plugins/<plugin>/index.js` (from `scripts/templates/opencode-index.js`) | Installs Git or npm specifiers only (`plugin add git+https://...`), reads the default export's `id`, and calls `setup(ctx)`; zero npm deps; `opencode plugin list` leaves a background server running |
-| pi | Root `package.json` (`pi.skills` names the root pack's bundle) | Any other pack installs from its bundle path, where pi finds `skills/` by convention |
-| Grok Build | `.grok-plugin/marketplace.json` -> `plugins/<plugin>/.grok-plugin/plugin.json` | Without a `hooks` field it would load `hooks/hooks.json`, so the manifest sets `"hooks": []`; root `.grok-plugin/plugin.json` keeps an install of the repository to the root pack's skills |
-| Kimi Code | Root `.kimi-plugin/plugin.json`, or `plugins/<plugin>/.kimi-plugin/plugin.json` | `/plugins install <path-or-zip-url>`, also served by `kimi web`'s API; the manifest lists only `skills`, so no hooks load |
-| Hermes | `plugins/<plugin>/plugin.yaml` + `__init__.py` (from `scripts/templates/hermes-init.py`) | Installs a repository subdirectory (`owner/repo/plugins/<plugin>`) and refuses the repository root as dangerous; its install scan rates the bundled hook scripts `caution` (they name `sudo`), which the user confirms |
-| `npx skills add` | `plugins/<plugin>/skills/<name>/SKILL.md` (flat) | Skills only, no hooks; the smoke driver pins the CLI version and disables its telemetry |
-| Muse Code | `.claude-plugin/marketplace.json` -> `plugins/<plugin>/.muse-plugin/plugin.json` | The manifest lists each skill under `capabilities.skills` and no hooks; Muse warns that the bundle carries several harness manifests and uses `.muse-plugin/` |
+| Claude Code | `.claude-plugin/marketplace.json` -> `plugins/<plugin>/` | Strict `owner` schema (`name`, optional `email`, no `url`); reads `skills/` and `hooks/hooks.json` |
+| Codex CLI | `.agents/plugins/marketplace.json` -> `plugins/<plugin>/` | Reads `skills/` and `hooks/codex-hooks.json` declared in `.codex-plugin/plugin.json` |
+| Antigravity | `plugins/<plugin>/.antigravity-plugin/plugin.json` | Reads `skills/` and root `hooks.json` |
+| Cursor | `plugins/<plugin>/.cursor-plugin/plugin.json` | Local copy into `~/.cursor/plugins/local/<plugin>/`; `"hooks": {}` keeps Claude hooks out |
+| Devin | `plugins/<plugin>/.devin-plugin/plugin.json` | Finds `skills/` by convention; hook adapter stays inert when `DEVIN_PROJECT_DIR` is set |
+| Grok Build | `.grok-plugin/marketplace.json` -> `plugins/<plugin>/.grok-plugin/plugin.json` | `"hooks": []` keeps hook files out; root `.grok-plugin/plugin.json` scopes root installs to the root pack |
+| Kimi Code | Root `.kimi-plugin/plugin.json` or bundle `.kimi-plugin/plugin.json` | Lists `skills` only (no hooks) |
+| Muse Code | `.claude-plugin/marketplace.json` -> `plugins/<plugin>/.muse-plugin/plugin.json` | Lists each skill explicitly under `capabilities.skills` (no hooks) |
+| Hermes | `plugins/<plugin>/plugin.yaml` + `__init__.py` | Installs bundle subdirectory; skills only |
+| OpenCode 2.x | Root `index.js` -> `plugins/<plugin>/index.js` | Zero npm deps; skills only |
+| pi | Root `package.json` (`pi.skills`) | Points to `./plugins/engineering-skills/skills`; skills only |
+| `npx skills add` | `plugins/<plugin>/skills/<name>/SKILL.md` | Flat skill folders only |
 
-`scripts/sync-plugins.sh` maps `hooks/<pack>/config/{claude-code,codex,antigravity}.json`
-to the path each harness reads (`hooks/hooks.json`, `hooks/codex-hooks.json`,
-root `hooks.json`), ships the rest of `hooks/<pack>/` except `tests/`,
-copies promoted skills flat into `skills/<name>/`, and writes the other
-harness manifests. Hooks run only in Claude Code, Codex, and Antigravity; the
-other manifests keep the hook files out.
+A new pack needs a `pack_meta` entry in `scripts/sync-plugins.sh` and entries in
+`.claude-plugin/marketplace.json` and `.agents/plugins/marketplace.json`.
+
+To smoke-test plugin installation locally (no model call, needs the harness CLI
+and `jq`):
+
+```bash
+bash tests/run-plugin-smoke.sh --harness claude-code
+```
 
 ## Hooks (`hooks/<pack>/`)
 
-Each hook is one entry script, `hooks/<pack>/<hook>.sh`, whose only argument
-names the harness (`claude-code`, `codex`, or `antigravity`). With no
-argument it detects Claude Code or Antigravity from the event shape. The
-shared code lives in `hooks/<pack>/lib/`:
+Each hook entry script (`hooks/<pack>/<hook>.sh`) takes the harness name
+(`claude-code`, `codex`, or `antigravity`) and delegates to shared checks under
+`hooks/<pack>/lib/`:
 
-- `adapter.sh` turns a harness event into a shell command or a list of edited
-  paths, and turns the verdict back into that harness's answer.
-- `checks.sh` holds the checks.
-- `walk.sh` and `shell.awk` split a command line into simple commands. They
-  follow `&&`, pipes, subshells, `bash -c`, `eval`, wrappers such as `sudo`
-  and `env`, and heredocs fed to a shell.
-- `json.awk` parses events without `jq`.
+- `adapter.sh` normalizes harness events, steps aside under Devin (`DEVIN_PROJECT_DIR`), and formats deny/allow answers.
+- `checks.sh` implements the guard rules.
+- `walk.sh` and `shell.awk` split command lines into simple commands.
+- `json.awk` parses event payloads without `jq`.
 
-To try a check without a harness:
+Try a check without a harness (exits 0 to allow, 2 to deny):
 
 ```bash
 bash hooks/engineering/lib/check.sh --hook guard-destructive-git --tool shell --command 'git reset --hard'
 ```
 
-It exits 0 to allow and 2 to deny, with the reason on stderr.
+Hook implementation rules:
 
-Rules for hook code:
+- Bash 3.2 and POSIX `awk` only (portable across Linux, macOS, and Windows Git
+  Bash; no `jq` or Python). Keep subprocess forks low.
+- Allow unparseable events with a note on stderr; ignore malformed `policy.json`
+  so broken config never grants a bypass.
+- Read bypasses only from `~/.config/augments-skills/policy.json`. Repo-local
+  `.augments-labs-config.json` may only add protected branches.
+- On Antigravity, answer `{}` to allow (never `"decision": "allow"`, which
+  bypasses the harness's own permission prompt).
 
-- Use bash 3.2 and POSIX awk only (macOS ships both). No `jq`, Python, or
-  other tools; `cygpath` is used on Windows when present.
-- Keep process forks low. Every check runs on every tool call, and process
-  start-up is slow on Windows.
-- Allow events the adapter cannot parse, with a note on stderr. Ignore a
-  malformed `policy.json` with a note, so it grants nothing.
-- Read bypasses only from `~/.config/augments-skills/policy.json`. A
-  repository's `.augments-labs-config.json` may only add protected branches.
-- On Antigravity, answer `{}` to allow. Never answer `"decision": "allow"`,
-  which approves the call outright and skips the harness's own permission
-  checks.
-
-`tests/run-engineering-hooks.sh` covers every rule with harness-shaped events
-in throwaway repositories and an isolated `HOME`. CI runs it on Linux, on
-macOS with `/bin/bash` 3.2, and on Windows. Add a case for every new rule and
-for every false positive you fix. Live hook tests inside each harness are
-manual for now. User-facing hook behavior is documented in
-[`docs/hooks.md`](docs/hooks.md).
-
-When adding or updating a harness adapter, update `scripts/sync-plugins.sh`,
-add/update `tests/harnesses/<name>.sh`, run
-`tests/run-plugin-smoke.sh --harness <name>`, and update user docs under `docs/`.
-The smoke test installs into an isolated home with no model call; with no
-promoted skill yet it installs a temporary copy carrying one sample skill.
-CI skips it because it needs each harness CLI. Drivers never copy credentials
-or touch your real harness home.
-
-## Opening a pull request
-
-1. Target `dev`.
-2. Fill every section of `.github/PULL_REQUEST_TEMPLATE.md` truthfully,
-   including orchestrator, model IDs, harness version, and review notes.
-3. Wait for all gating CI checks to pass on the current head commit before a
-   maintainer merges.
+Run `bash tests/run-engineering-hooks.sh` after any hook change, and update
+[`docs/hooks.md`](docs/hooks.md) when user-visible behavior changes.

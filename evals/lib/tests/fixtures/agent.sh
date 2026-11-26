@@ -83,19 +83,29 @@ fi
 if [ "$kind" = activation ]; then
   # What the work tree was seeded with, for the per-query fixture test.
   [ -n "$state" ] && printf '%s\t%s\n' "$(ls "$wd" | LC_ALL=C sort | paste -sd, -)" "$prompt" >> "$state/seeded"
-  # Routing: load the skill when a word of 5+ letters from the request
-  # appears in its description.
-  desc=""
-  [ -n "$skill_md" ] && desc="$(sed -n 's/^description: *//p' "$skill_md" | tr 'A-Z' 'a-z')"
-  for w in $(printf '%s\n' "$prompt" | tr 'A-Z' 'a-z' | tr -c 'a-z\n' ' '); do
-    [ "${#w}" -ge 5 ] || continue
-    case "$desc" in
-      *"$w"*)
-        echo "SKILL $skill_name"
-        if [ "$mode" = linger ]; then sleep 30; fi
-        exit 0 ;;
-    esac
-  done
+  # Routing: load each installed skill whose description contains a 5+ letter
+  # word from the request.
+  fired=0
+  if [ -n "$bundle" ]; then
+    for f in "$bundle"/skills/*/SKILL.md; do
+      [ -f "$f" ] || continue
+      sname="$(basename "$(dirname "$f")")"
+      desc="$(sed -n 's/^description: *//p' "$f" | tr 'A-Z' 'a-z')"
+      for w in $(printf '%s\n' "$prompt" | tr 'A-Z' 'a-z' | tr -c 'a-z\n' ' '); do
+        [ "${#w}" -ge 5 ] || continue
+        case "$desc" in
+          *"$w"*)
+            echo "SKILL $sname"
+            fired=1
+            break ;;
+        esac
+      done
+    done
+  fi
+  if [ "$fired" -eq 1 ]; then
+    if [ "$mode" = linger ]; then sleep 30; fi
+    exit 0
+  fi
   echo "TEXT no skill needed"
   exit 0
 fi

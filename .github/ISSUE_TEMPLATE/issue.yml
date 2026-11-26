@@ -1,0 +1,15 @@
+name: Issue or proposal
+description: Report a bug, skill failure, harness issue, or propose a new skill
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened or what do you want to add?
+      description: Describe the concrete failure, gap, or proposal.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Environment (if applicable)
+      description: Harness name and version, model, OS, and exact command or prompt.

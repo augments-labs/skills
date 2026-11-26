@@ -9,6 +9,10 @@
 #   antigravity  stdin {toolCall.name, toolCall.args, cwd, hookEventName};
 #                answer on stdout: {"decision":"deny","reason":...} or {}.
 #                Never answer "allow": that would approve the call outright.
+#
+# Devin also loads a plugin's hooks/hooks.json and hooks.json, with its own
+# tool names and answers. These hooks are not adapted to it, so they allow
+# every call when Devin runs them (it sets DEVIN_PROJECT_DIR for hooks).
 
 # shellcheck source=common.sh
 . "$AUG_LIB/common.sh"
@@ -109,6 +113,8 @@ aug_parse_event() {
 aug_hook_main() {
   local hook="$1" harness="${2-}" input verdict=0 what
   input="$(cat)"
+  # Under Devin: allow silently (see the header).
+  [ -z "${DEVIN_PROJECT_DIR-}" ] || return 0
   if [ -z "$harness" ]; then
     case "$input" in *'"toolCall"'*) harness=antigravity ;; *) harness=claude-code ;; esac
   fi
