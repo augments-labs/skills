@@ -6,10 +6,21 @@ All notable changes to `augments-labs/skills` are documented here. Entries follo
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-11-26
+
 - `debugging` now writes the code fallback you ask for when the cause is bad
   data, a permission, or infrastructure. It keeps the fallback to the inputs
   that fail today and still reports the upstream cause, instead of stopping
   to ask.
+- `engineering-skills` now installs on Cursor and Devin (skills only), bringing
+  support to 11 coding agents plus `npx skills add`.
+- Added user documentation under `docs/` covering installation, first-session
+  checks, per-skill guides, design concepts, the skill catalogue, the agent
+  matrix, and conformance notes.
+- Simplified the evaluation tooling and records: each promoted skill now keeps
+  one compact JSON record under `evals/results/<pack>/<skill>.json`, triggering
+  checks support `--with-skills` to test routing against neighboring skills, and
+  refusal detection reads provider errors instead of agent prose.
 
 ## [0.1.1] - 2026-11-21
 
