@@ -185,6 +185,55 @@ eq "--skill-dir errors launch nothing" "$before" "$(tl_launches)"
 trig --runs 1 --splits train --queries "$wq/queries.json"
 jeq "--queries replaces the committed queries for a committed skill" "$ws/query-results.json" 'map(.query)' '["Rename the gadget called oldGadget"]'
 
+# --- flat queries (optional split) & --with-skills pack routing ---------------
+fq="$TL_TMP/flat-queries.json"
+printf '%s\n' '{"queries": [
+  {"query": "Rename the widget called oldWidget", "should_trigger": true},
+  {"query": "What time is it in Tokyo", "should_trigger": false}]}' > "$fq"
+trig --runs 1 --queries "$fq"
+eq "flat queries without split exit 0 when all pass" 0 "$rc"
+jeq "flat queries default to split 'all'" "$rec" '.splits | keys' '["all"]'
+jeq "flat queries pass rate" "$rec" '.splits.all.pass_rate' 1
+
+# Neighbor routing with --with-skills
+mkdir -p "$repo/skills/engineering/quiet-neighbor" "$repo/skills/engineering/noisy-neighbor"
+printf -- '---\nname: quiet-neighbor\ndescription: "Use when deploying containers."\n---\n# Quiet\n' \
+  > "$repo/skills/engineering/quiet-neighbor/SKILL.md"
+printf -- '---\nname: noisy-neighbor\ndescription: "Use when renaming any widget or checking Tokyo weather."\n---\n# Noisy\n' \
+  > "$repo/skills/engineering/noisy-neighbor/SKILL.md"
+( cd "$repo" && tl_git add -A && tl_git commit -qam "add neighbor skills" ) || not_ok "commit neighbors"
+bad "--with-skills naming the skill under test" 2 --with-skills demo-skill --dry-run
+bad "--with-skills naming an unknown skill" 2 --with-skills no-such-skill --dry-run
+bad "--with-skills listing a skill twice" 2 --with-skills quiet-neighbor,quiet-neighbor --dry-run
+
+trig --runs 1 --queries "$fq" --with-skills quiet-neighbor
+eq "--with-skills quiet neighbor passes" 0 "$rc"
+jeq "--with-skills records neighbor list and empty cross-loads" "$rec" '[.with_skills, .other_skills_loaded]' '[["quiet-neighbor"],{}]'
+lacks "--with-skills run is not offered for recording" "$TL_TMP/trig.err" "record it with"
+
+trig --runs 1 --queries "$fq" --with-skills noisy-neighbor
+eq "--with-skills competing neighbor fails" 1 "$rc"
+jeq "--with-skills reports the competing neighbor in other_skills_loaded" "$rec" '.other_skills_loaded' '{"noisy-neighbor":2}'
+contains "--with-skills summary prints the competing neighbor" "$TL_TMP/trig.err" "other=noisy-neighbor:1"
+"$TL_EVALS/bin/report" "$ws" > /dev/null 2> "$TL_TMP/report.err"
+check "report refuses a --with-skills routing check" test $? -ne 0
+contains "report refusal explains why" "$TL_TMP/report.err" "routing check is not a solo triggering record"
+
+trig --runs 1 --queries "$fq" --with-skills all --dry-run
+eq "--with-skills all dry run exits 0" 0 "$rc"
+contains "--with-skills all lists both promoted neighbors" "$TL_TMP/trig.err" "with neighbor skills: noisy-neighbor quiet-neighbor"
+
+# Sliding-window --jobs runs probes concurrently and cleans up.
+: > "$FAKE_LAUNCH_LOG"; rm -rf "$FAKE_STATE/launches" "$FAKE_STATE/concurrency" "$FAKE_STATE/active"
+mode parallel
+trig --runs 2 --queries "$fq" --jobs 3
+eq "parallel triggering exits 0" 0 "$rc"
+max_conc="$(awk 'BEGIN { m = 0 } $1 + 0 > m { m = $1 + 0 } END { print m }' "$FAKE_STATE/concurrency")"
+check "parallel triggering runs concurrently (peak=${max_conc})" test "$max_conc" -ge 2
+check "parallel triggering respects --jobs cap (peak=${max_conc})" test "$max_conc" -le 3
+eq "parallel triggering removed all run directories" "" "$(ls -A "$TMPDIR")"
+mode ""
+
 # --- manual-only skills -------------------------------------------------------
 skf="$repo/skills/in-progress/demo-skill/SKILL.md"
 qf="$repo/evals/engineering/demo-skill/queries.json"
@@ -193,11 +242,11 @@ awk 'NR == 2 { print "disable-model-invocation: true" } { print }' "$skf" > "$sk
 bad "a manual-only skill with train queries" 2 --runs 1 --dry-run
 jq '.queries = [.queries[0] | .split = "negative"]' "$qf" > "$qf.tmp" && mv "$qf.tmp" "$qf"
 bad "a negative query that should trigger" 2 --runs 1 --dry-run
-printf '%s\n' '{"queries": [{"query": "What time is it in Tokyo", "should_trigger": false, "split": "negative"},
-  {"query": "Write a haiku about rain", "should_trigger": false, "split": "negative"}]}' > "$qf"
+printf '%s\n' '{"queries": [{"query": "What time is it in Tokyo", "should_trigger": false},
+  {"query": "Write a haiku about rain", "should_trigger": false}]}' > "$qf"
 ( cd "$repo" && tl_git commit -qam "negative queries" ) || not_ok "commit negative queries"
 trig --runs 1
 eq "a quiet manual-only skill exits 0" 0 "$rc"
-jeq "a manual-only record" "$rec" '[.manual_only, (.splits | keys), .splits.negative.pass_rate]' '[true,["negative"],1]'
+jeq "a manual-only record defaults split to negative" "$rec" '[.manual_only, (.splits | keys), .splits.negative.pass_rate]' '[true,["negative"],1]'
 
 tl_done

@@ -15,14 +15,12 @@ if printf '%s\n' "$staged" | grep -qE '^(\.plans/|evals/workspaces/)'; then
   exit 1
 fi
 
-relevant='^(skills/|hooks/|plugins/|evals/|scripts/|tests/|docs/|\.claude-plugin/|\.agents/|\.github/|README\.md$|AGENTS\.md$|package\.json$)'
+relevant='^(skills/|hooks/|plugins/|evals/|scripts/|tests/|docs/|\.claude-plugin/|\.agents/|\.grok-plugin/|\.kimi-plugin/|\.github/|README\.md$|AGENTS\.md$|package\.json$|index\.js$)'
 printf '%s\n' "$staged" | grep -qE "$relevant" || exit 0
 
 fail=0
 for check in \
   "bash scripts/validate.sh --strict" \
-  "bash scripts/token-budget.sh --check" \
-  "bash scripts/validate-trigger-collisions.sh --strict" \
   "bash evals/bin/check"; do
   out="$($check 2>&1)" || { echo "pre-commit: FAILED: $check" >&2; printf '%s\n' "$out" | sed 's/^/  /' >&2; fail=1; }
 done

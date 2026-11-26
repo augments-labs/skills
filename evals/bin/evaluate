@@ -3,10 +3,10 @@
 # raw runs and a compact benchmark.json.
 #
 # Arms: full (the skill in skills/<pack>/<name>/ or skills/in-progress/<name>/),
-# distilled (evals/<pack>/<name>/distilled/SKILL.md), none (no skill),
-# old_skill (the skill at --base), and pack (the skill installed beside every
-# promoted skill of its pack). Every arm installs a temporary skill-only
-# bundle into an isolated harness home, so hooks stay OFF in all of them.
+# none (no skill), old_skill (the skill at --base), and pack (the skill
+# installed beside every promoted skill of its pack). Every arm installs a
+# temporary skill-only bundle into an isolated harness home, so hooks stay OFF
+# in all of them.
 #
 # A run with the pack arm is a composite check, not a promotion record: it
 # shows whether the skill still works, and stays quiet on the controls, when
@@ -28,14 +28,13 @@ Usage: evals/bin/evaluate --pack PACK --skill NAME [options]
        evals/bin/evaluate --resume DIR [--jobs N] [--timeout SECONDS] [--keep-workdirs] [--allow-unverified] [--dry-run]
 
   --harness NAME       claude-code (default), codex, or antigravity
-  --arms LIST          full,distilled,none (default); full,old_skill for an edit;
-                       pack (alone or with full,none) for a composite pack check
+  --arms LIST          full,none (default); full,old_skill,none for an edit;
+                       pack (alone or with full,none) for a pack check
   --base COMMIT        commit holding the old skill (required with old_skill)
   --runs N             runs per case per arm (default 3)
   --jobs N             sessions in parallel (default 1)
   --eval IDS           only these case ids (comma-separated)
   --model NAME         model passed to the harness (default: the harness default)
-  --shipped-arm ARM    record this shipped arm (full|distilled) instead of the decision table
   --timeout SECONDS    per-session timeout (default 900)
   --out DIR            workspace (default evals/workspaces/<stamp>-<pack>-<skill>-<harness>)
   --resume DIR         resume an existing workspace (runs missing and refusal slots only)
@@ -47,8 +46,8 @@ Set EVALS_COST_PER_SESSION (a number) to price the plan in your currency.
 EOF
 }
 
-pack="" skill="" harness=claude-code arms_csv=full,distilled,none base="" runs=3 jobs=1 only=""
-model="" shipped_flag="" timeout_s=900 out="" resume="" resume_set=0 plan_flag_set=0
+pack="" skill="" harness=claude-code arms_csv=full,none base="" runs=3 jobs=1 only=""
+model="" timeout_s=900 out="" resume="" resume_set=0 plan_flag_set=0
 keep=0 allow_unverified=0 dry_run=0
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -61,7 +60,6 @@ while [ "$#" -gt 0 ]; do
     --jobs) jobs="${2:-}"; shift 2 ;;
     --eval) only="${2:-}"; plan_flag_set=1; shift 2 ;;
     --model) model="${2:-}"; plan_flag_set=1; shift 2 ;;
-    --shipped-arm) shipped_flag="${2:-}"; plan_flag_set=1; shift 2 ;;
     --timeout) timeout_s="${2:-}"; shift 2 ;;
     --out) out="${2:-}"; plan_flag_set=1; shift 2 ;;
     --resume) resume="${2:-}"; resume_set=1; shift 2 ;;
@@ -96,7 +94,7 @@ case_ids=()
 followup_cases=0
 if [ "$resume_set" -eq 1 ]; then
   [ -n "$resume" ] || die "--resume needs a workspace directory"
-  [ "$plan_flag_set" -eq 0 ] || die "--resume takes settings from the workspace plan; do not combine with --pack/--skill/--harness/--arms/--base/--runs/--eval/--model/--shipped-arm/--out"
+  [ "$plan_flag_set" -eq 0 ] || die "--resume takes settings from the workspace plan; do not combine with --pack/--skill/--harness/--arms/--base/--runs/--eval/--model/--out"
   [ -d "$resume" ] || die "resume workspace not found: $resume"
   ws="$(cd "$resume" && pwd -P)"
   [ -f "$ws/plan.json" ] && jq -e '.schema_version == 1 and .hooks_enabled == false and (.cases | type == "array" and length > 0) and (.arm_order | type == "array" and length > 0)' "$ws/plan.json" >/dev/null 2>&1 \
@@ -107,7 +105,6 @@ if [ "$resume_set" -eq 1 ]; then
   harness="$(jq -r '.harness' "$ws/plan.json")"
   runs="$(jq -r '.runs_per_eval' "$ws/plan.json")"
   model="$(jq -r '.model_flag // ""' "$ws/plan.json")"
-  shipped_flag="$(jq -r '.shipped_arm_flag // ""' "$ws/plan.json")"
   arms_csv="$(jq -r '.arm_order | join(",")' "$ws/plan.json")"
   IFS=, read -r -a arms <<< "$arms_csv"
   case "$runs" in ''|0*|*[!0-9]*) die "invalid runs_per_eval in $ws/plan.json" ;; esac
@@ -123,13 +120,6 @@ if [ "$resume_set" -eq 1 ]; then
         if [ "$plan_tree" != null ]; then
           cur_tree="$(skill_tree "$repo" "$commit" "$full_rel")"
           [ "$cur_tree" = "$plan_tree" ] || die "cannot resume: full skill tree changed ($cur_tree != $plan_tree); start a new workspace"
-        fi ;;
-      distilled)
-        [ -f "$ws/bundles/distilled/skills/$skill/SKILL.md" ] || die "missing distilled bundle in $ws"
-        plan_tree="$(jq -r '.arms.distilled.skill_tree // "null"' "$ws/plan.json")"
-        if [ "$plan_tree" != null ]; then
-          cur_tree="$(skill_tree "$repo" "$commit" "evals/$pack/$skill/distilled")"
-          [ "$cur_tree" = "$plan_tree" ] || die "cannot resume: distilled skill tree changed ($cur_tree != $plan_tree); start a new workspace"
         fi ;;
       old_skill)
         [ -f "$ws/bundles/old_skill/skills/$skill/SKILL.md" ] || die "missing old_skill bundle in $ws" ;;
@@ -153,7 +143,6 @@ if [ "$resume_set" -eq 1 ]; then
 else
   [ -n "$pack" ] && [ -n "$skill" ] || { usage >&2; die "--pack and --skill are required"; }
   case "$runs" in ''|0*|*[!0-9]*) die "--runs must be a positive integer" ;; esac
-  case "$shipped_flag" in ''|full|distilled) ;; *) die "--shipped-arm must be full or distilled" ;; esac
 
   case_dir="$repo/evals/$pack/$skill"
   [ -f "$case_dir/evals.json" ] || die "no evals at evals/$pack/$skill/evals.json"
@@ -163,7 +152,7 @@ else
   IFS=, read -r -a arms <<< "$arms_csv"
   seen=" "
   for a in "${arms[@]}"; do
-    case "$a" in full|distilled|none|old_skill|pack) ;; *) die "unknown arm: $a" ;; esac
+    case "$a" in full|none|old_skill|pack) ;; *) die "unknown arm: $a" ;; esac
     case "$seen" in *" $a "*) die "arm listed twice: $a" ;; esac
     seen="$seen$a "
   done
@@ -172,14 +161,12 @@ else
   case "$seen" in
     *" pack "*)
       mode=composite
-      case "$seen" in *" distilled "*|*" old_skill "*) die "the pack arm combines only with full and none" ;; esac
-      [ -z "$shipped_flag" ] || die "--shipped-arm does not apply to a composite run" ;;
+      case "$seen" in *" old_skill "*) die "the pack arm combines only with full and none" ;; esac ;;
     *" full "*) ;;
     *) die "--arms must include full (or pack, for a composite check)" ;;
   esac
   [ "$mode" = edit ] && [ -z "$base" ] && die "old_skill needs --base COMMIT"
   [ "$mode" != edit ] && [ -n "$base" ] && die "--base applies only with the old_skill arm"
-  [ "$shipped_flag" = distilled ] && case "$seen" in *" distilled "*) ;; *) die "--shipped-arm distilled needs the distilled arm" ;; esac
 
   full_rel="$(skill_rel_dir "$repo" "$pack" "$skill")" || die "no skill at skills/$pack/$skill/ or skills/in-progress/$skill/"
   commit="$(git -C "$repo" rev-parse HEAD)" || die "$repo is not a git repository with a commit"
@@ -191,9 +178,6 @@ else
   for a in "${arms[@]}"; do
     case "$a" in
       full) add_arm full "$commit" "$(skill_tree "$repo" "$commit" "$full_rel")" ;;
-      distilled)
-        [ -f "$case_dir/distilled/SKILL.md" ] || die "the distilled arm needs evals/$pack/$skill/distilled/SKILL.md"
-        add_arm distilled "$commit" "$(skill_tree "$repo" "$commit" "evals/$pack/$skill/distilled")" ;;
       old_skill)
         base_commit="$(git -C "$repo" rev-parse --verify --quiet "$base^{commit}")" || die "unknown --base commit: $base"
         old_rel="$(skill_rel_dir "$repo" "$pack" "$skill" "$base_commit")" || die "no $skill skill at $base"
@@ -325,18 +309,17 @@ trap 'exit 143' TERM
 
 if [ "$resume_set" -ne 1 ]; then
   jq -n --arg pack "$pack" --arg skill "$skill" --arg mode "$mode" --arg harness "$harness" \
-    --arg hv "$harness_version" --arg model "$model" --argjson runs "$runs" --arg shipped "$shipped_flag" \
+    --arg hv "$harness_version" --arg model "$model" --argjson runs "$runs" \
     --argjson arms "$arms_json" --arg order "$arms_csv" --argjson cases "$cases_json" --arg started "$(utc_now)" \
     '{schema_version: 1, pack: $pack, skill: $skill, mode: $mode, harness: $harness,
       harness_version: (if $hv == "" then null else $hv end), model_flag: (if $model == "" then null else $model end),
-      runs_per_eval: $runs, hooks_enabled: false, shipped_arm_flag: (if $shipped == "" then null else $shipped end),
+      runs_per_eval: $runs, hooks_enabled: false,
       arms: $arms, arm_order: ($order | split(",")), cases: [$cases[] | {id, kind}], started_at: $started}' \
     > "$ws/plan.json"
 
   for a in "${arms[@]}"; do
     case "$a" in
       full) build_bundle "$repo/$full_rel" "$skill" "$ws/bundles/full" ;;
-      distilled) build_bundle "$case_dir/distilled" "$skill" "$ws/bundles/distilled" ;;
       old_skill)
         mkdir -p "$ws/bundles/.old-src"
         git -C "$repo" archive "$base_commit" "$old_rel" | tar -x -C "$ws/bundles/.old-src"

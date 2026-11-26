@@ -1,22 +1,21 @@
 # Evals
 
-The harness measures whether a skill helps an agent. It compares arms (the skill, a distilled skill, no skill) on deterministic cases, and it checks that the skill's description routes the right requests. Every live command is an agent session that costs money. Run `--dry-run` first. CI runs only the offline suites (`evals/bin/check`).
+The harness measures whether a skill helps an agent. It compares arms (the skill vs no skill, or an edited skill vs the previous commit) on deterministic cases, and checks that the skill's description routes the right requests. Every live command launches agent sessions that cost money. Run `--dry-run` first. CI runs only the offline suites (`evals/bin/check`).
 
 ## Layout
 
-```
+```text
 evals/
-  bin/          evaluate · triggering · optimize-description · report · grade · benchmark · check
+  bin/          evaluate · triggering · report · grade · benchmark · check
   lib/          common.sh · home-env.sh · stream-text.sh · evalkit.py (schemas, grading, records)
   lib/tests/    offline suites, fake adapter, tripwire shims, fixtures
   harnesses/    claude-code.sh · codex.sh · antigravity.sh
   <pack>/<skill>/
-    evals.json          cases
+    evals.json          behavior cases and controls
     files/<fixture>/    fixture trees the cases start from
     queries.json        triggering queries
-    distilled/SKILL.md  the distilled arm (optional)
-  results/<date>-<pack>-<skill>-<harness>[-<model>][-triggering][-<n>]/
-    benchmark.json | triggering.json      (committed records, nothing else)
+  results/<pack>/<skill>.json
+                        compact committed summary per skill (overwritten in place)
   workspaces/   raw runs (gitignored; never commit)
 ```
 
@@ -24,44 +23,40 @@ A skill resolves from `skills/<pack>/<name>/` or, if not found there, from `skil
 
 ## Commands
 
-```
+```text
 evals/bin/evaluate --pack PACK --skill NAME [--harness claude-code|codex|antigravity]
-    [--arms full,distilled,none | --arms full,old_skill,none --base COMMIT
+    [--arms full,none | --arms full,old_skill,none --base COMMIT
      | --arms [full,]pack[,none]] [--runs 3]
-    [--jobs 1] [--eval IDS] [--model NAME] [--shipped-arm full|distilled]
+    [--jobs 1] [--eval IDS] [--model NAME]
     [--timeout 900] [--out DIR] [--keep-workdirs] [--allow-unverified] [--dry-run]
 evals/bin/evaluate --resume DIR [--jobs 1] [--timeout 900] [--keep-workdirs]
     [--allow-unverified] [--dry-run]
 
 evals/bin/triggering --pack PACK --skill NAME [--harness ...] [--runs 3]
-    [--splits train,validation,holdout,negative] [--threshold 0.5] [--jobs 3]
+    [--with-skills NAME[,NAME...]|all] [--splits LIST] [--threshold 0.5] [--jobs 3]
     [--timeout 120] [--max-turns 6] [--description-file F] [--model NAME]
     [--out DIR] [--json] [--allow-unverified] [--dry-run]
 evals/bin/triggering --pack PACK --skill-dir DIR --queries FILE [options as above]
     exit: 0 all pass · 1 a query failed or was inconclusive · 2 bad args/unrunnable · 3 CLI missing
 
-evals/bin/optimize-description --pack PACK --skill NAME [--harness ...] [--runs 3]
-    [--max-iterations 5] [--apply] [--dry-run] ...
-
 evals/bin/report WORKSPACE|RECORD.json [--date YYYY-MM-DD]
 evals/bin/report --scoreboard [--check]
 ```
 
-`EVALS_COST_PER_SESSION` (a number) prices the plan of a `--dry-run`. `report` copies only the record into `evals/results/`. It refuses to record the same record twice, to record a `skill_tree` of `null` (an uncommitted skill or a candidate description), and to record a run with hooks enabled. The record's directory name ends with its model ID, lowercased with other characters turned into dashes, so records for several models can share a date. A different record whose name is already taken, such as a second run on the same day, gets the next free `-2`, `-3`, ... suffix. Recording a benchmark rewrites the README table between `<!-- eval-scoreboard:start -->` and `<!-- eval-scoreboard:end -->`. The table shows the latest record for each skill and model. `--check` exits 1 if that table has drifted from the records.
+`EVALS_COST_PER_SESSION` (a number) prices the plan of a `--dry-run`. `report` validates a workspace's `benchmark.json` or `triggering.json`, merges its compact summary into `evals/results/<pack>/<skill>.json` (replacing stale entries when `skill_tree` changes, so git tracks history), and refreshes the README scoreboard between `<!-- eval-scoreboard:start -->` and `<!-- eval-scoreboard:end -->`. It refuses a `skill_tree` of `null` (uncommitted skill or candidate description), hooks enabled, composite runs, and `--with-skills` routing runs. `--check` exits 1 if the README table has drifted from `evals/results/`.
 
 ## Arms
 
 | Arm | Bundle |
-|---|---|
+| --- | --- |
 | `full` | the working-tree skill dir |
-| `distilled` | `evals/<pack>/<skill>/distilled/` |
 | `none` | nothing installed |
 | `old_skill` | the skill at `--base`, extracted with `git archive` |
 | `pack` | the skill beside every promoted skill in `skills/<pack>/` |
 
-A bundle holds `SKILL.md` and the skill's `scripts/`, `references/`, and `assets/` directories, and nothing else. Hooks are off in every arm, and records carry `hooks_enabled: false`. `--arms full,distilled,none` runs in promotion mode. An `--arms` list with `old_skill` runs in edit mode; keep `none` in it, because the eval-record gate checks the controls against `none`.
+A bundle holds `SKILL.md` and the skill's `scripts/`, `references/`, and `assets/` directories, and nothing else. Hooks are off in every arm, and records carry `hooks_enabled: false`. `--arms full,none` runs in promotion mode. Including `old_skill` runs in edit mode; keep `none` in it so controls still compare against baseline.
 
-An `--arms` list with `pack` runs in composite mode, a check rather than a record. It shows whether a skill still passes its cases, and whether the controls stay quiet, when the whole pack competes for the same session. Run it for every promoted skill once the pack holds more than one, and before a release. `pack` combines only with `full` and `none`. The record adds `skill_loads`: for each arm and case, how many runs loaded each skill. A load on a `non_trigger` case, or a load of a skill other than the one under test, is cross-triggering to read before you ship. `evals/bin/report` refuses a composite record.
+An `--arms` list with `pack` runs in composite mode, an optional check rather than a committed record. Do not re-run it across every unchanged skill before every release. For most neighbor overlap checks, prefer `evals/bin/triggering --with-skills <neighbor>`, which tests 1-turn routing at a fraction of the cost. Use `--arms pack` only when you need to check full multi-turn behavior beside the rest of the pack.
 
 ## Cases (`evals.json`)
 
@@ -86,85 +81,39 @@ An `--arms` list with `pack` runs in composite mode, a check rather than a recor
 ]}
 ```
 
-- **Kinds.** A `trap` case needs at least one assertion. A `non_trigger` case may list `allowed_files` (globs). Any other changed file is counted as `unrequested_files`. A `small_fix` case is a routine task the skill must not slow down.
-- **Assertions** are deterministic. Each path must stay inside the work tree, symlinks included. Patterns are Python regexes in multiline mode, and an assertion may set `"ignore_case": true`. A `git-count` counts `commits` or `changed_files` since the seed commit.
-- **`script`** gets either python3 `source` or a `path` relative to the case dir. It receives the work dir as `argv[1]`. Exit 0 passes, exit 1 fails, and any other code is `needs_review`. Verifiers and commands run with a scrubbed env (`PATH`, a scratch `HOME`, `EVAL_WORKDIR`, `EVAL_CHANGED_FILES`, `EVAL_SEED=seed`). A timeout is `needs_review`.
-- **`skill-triggering`** scores a skill the run wrote: `{"type": "skill-triggering", "path": ".agents/skills/*", "queries": "written-queries.json", "runs": 3, "threshold": 0.5}`. `path` is a glob in the work tree and `queries` a queries file in the case dir (its fixtures resolve under `files/` next to it); `runs` and `threshold` are optional. After the session, `evaluate` finds the one skill the run wrote under `path` and runs `evals/bin/triggering --skill-dir` on it, with the run's harness and model, into `<run>/triggering-<i>/`. It passes when every query passes. No skill, more than one, or a skill whose `name` is invalid or differs from its directory fails. An inconclusive query or a harness error is `needs_review`, and a refusal that leaves a query unscored makes the run indeterminate (`refusal`), so `--resume` reruns it. Each such case adds up to `queries x runs` short sessions per run; `--dry-run` counts them.
-- **Follow-ups.** An optional `"followups": ["Now update registry.txt to match.", "Thanks, that is all."]` (a non-empty list of non-empty strings) sends more messages after `prompt`, in order, into the same session, with the same home, work tree, and tools. The case is graded once, on the final work tree. The whole session shares one `--timeout`, and a follow-up that fails ends the session. A run keeps the first prompt in `prompt.txt` and the rest in `followups.json`. `stream.ndjson` holds every turn's events, appended in order. Metrics are summed over the turns, and `response.txt` is the final answer. On an adapter that cannot send follow-ups, the case runs no session at all and every run is indeterminate (`followups_unsupported`), so it is never graded on its first turn alone.
-- **Indeterminate runs.** A run is indeterminate if it hits any of these: a timeout, a nonzero exit, a refusal or usage limit, no model turn, a skill loaded in `none`, a setup failure, or follow-ups the adapter cannot send. Indeterminate runs are counted apart and never scored.
+- **Kinds.** A `trap` case needs at least one assertion. A `non_trigger` case may list `allowed_files` (globs); any other changed file counts as `unrequested_files`. A `small_fix` case is a routine task the skill must not slow down.
+- **Assertions** are deterministic. Paths stay inside the work tree, symlinks included. Patterns are Python regexes in multiline mode, with optional `"ignore_case": true`. `git-count` counts `commits` or `changed_files` since the seed commit.
+- **`script`** takes either python3 `source` or a `path` relative to the case dir and receives the work dir as `argv[1]`. Exit 0 passes, exit 1 fails, and any other code or timeout is `needs_review`. Verifiers run with a scrubbed environment and scratch `HOME`.
+- **`skill-triggering`** scores a skill the run wrote: `{"type": "skill-triggering", "path": ".agents/skills/*", "queries": "written-queries.json", "runs": 3, "threshold": 0.5}`. After the session, `evaluate` runs `evals/bin/triggering --skill-dir` on the written skill.
+- **Follow-ups.** An optional `"followups": [...]` array sends additional messages in order into the same session and grades once on the final work tree. Adapters that do not support follow-ups mark those runs indeterminate (`followups_unsupported`).
+- **Indeterminate runs.** Runs hitting a timeout, nonzero exit, provider refusal, no model turn, skill loaded in `none`, setup failure, or unsupported follow-ups are counted apart and never scored.
 
-## `benchmark.json`
-
-```
-{schema_version: 1, pack, skill, mode: "promotion"|"edit"|"composite",
- shipped_arm: "full"|"distilled" ("pack" in composite mode),
- measured_at, harness, harness_version, model, runs_per_eval, hooks_enabled: false,
- arms: {full: {commit, skill_tree}, distilled?: {...}, old_skill?: {...}, none?: null,
-   pack?: {commit, skill_tree, pack_skills: {<skill>: <tree>}}},
- run_summary: {<arm>: {pass_rate, scored_runs, indeterminate_count, needs_review_count,
-   mean_output_tokens, mean_time_seconds,
-   control_non_trigger: {skill_loads, unrequested_files, median_tool_calls},
-   control_small_fix: {pass_rate, median_output_tokens, median_tool_calls, median_turns}}},
- evals: [{id, kind, arms: {<arm>: {scored_runs, passed, indeterminate, needs_review}}}],
- deltas: {full_vs_none?, distilled_vs_none?, full_vs_distilled?, full_vs_old_skill?,
-   pack_vs_full?, pack_vs_none?},
- skill_loads?: {<arm>: {<case id>: {<skill>: <runs that loaded it>}}}}
-```
-
-- `pass_rate` covers trap cases only.
-- `skill_tree` is `git rev-parse <commit>:<skill dir>`, or `null` when the skill dir has uncommitted changes.
-- Deltas are fractions.
-- Control metrics are medians, and the token metrics use output tokens.
-
-**Shipped arm.** `--shipped-arm` sets it. Without that flag, the shipped arm is `distilled` when all three of these hold, and `full` otherwise:
-
-- `distilled_vs_none >= 0.20`
-- distilled passes the control gates against `none`
-- `full_vs_distilled < 0.10`
-
-**Control gates.** The non-trigger gate needs `skill_loads = 0`, `unrequested_files = 0`, and median tool calls of at most none + 1. The small-fix gate needs a pass rate of at least none, median tool calls of at most none + 2, median turns of at most none + 1, and median output tokens of at most 1.5x none.
+**Control gates.** The non-trigger gate requires `skill_loads = 0`, `unrequested_files = 0`, and median tool calls at most `none + 1`. The small-fix gate requires pass rate at least `none`, median tool calls at most `none + 2`, median turns at most `none + 1`, and median output tokens at most `1.5x none`.
 
 ## Triggering (`queries.json`, `triggering.json`)
 
 ```json
 {"fixture": "app", "queries": [
-  {"query": "Rename the widget called oldWidget", "should_trigger": true, "split": "train"},
-  {"query": "What time is it in Tokyo", "should_trigger": false, "split": "validation"},
-  {"query": "The billing tests fail since the refactor", "should_trigger": true, "split": "train", "fixture": "billing"}]}
+  {"query": "Rename the widget called oldWidget", "should_trigger": true},
+  {"query": "What time is it in Tokyo", "should_trigger": false},
+  {"query": "The billing tests fail since the refactor", "should_trigger": true, "fixture": "billing"}
+]}
 ```
 
-A query's `fixture` overrides the file-level one. `--queries FILE` scores another queries file; its fixtures resolve under `files/` next to it. `--skill-dir DIR` scores the skill in `DIR`, named by its `SKILL.md` `name`, instead of `--skill`. Like a candidate description, it records a `null` `skill_tree` and cannot be recorded. Seed each query with the files it names: a request about files the work tree lacks leaves the model nothing to do but load the skill, which overstates the trigger rate.
+- `split` is optional (defaults to `"all"`, or `"negative"` for manual-only skills). Named splits (`train`, `validation`, `holdout`, `negative`) are still supported with `--splits`.
+- A query's `fixture` overrides the file-level one. Seed each query with the files it names so missing files do not overstate trigger rates.
+- **Scoring.** A `should_trigger: true` query passes when its trigger rate over valid runs is above `--threshold`; `should_trigger: false` passes when below.
+- **Neighbor routing (`--with-skills`).** Pass `--with-skills <neighbor>` (or `--with-skills all`) to install competing skills beside the skill under test. A query fails if any neighbor loads at or above `--threshold`, and the summary prints `other=<skill>:<count>`.
+- **Manual-only skills** (`disable-model-invocation: true`) take only `should_trigger: false` queries and confirm the skill never self-fires.
 
-```
-{schema_version: 1, pack, skill, manual_only, harness, harness_version, model,
- plugin: {commit, skill_tree, description_sha256}, runs, threshold,
- splits: {train: {queries, passed, pass_rate, inconclusive}, validation, holdout?, negative?}}
-```
+## Isolation and adapters
 
-- `description_sha256` is the sha256 of the description value.
-- **Scoring.** A should-trigger query passes when its trigger rate is above the threshold. A should-not query passes when its rate is below it. The rate is computed over valid runs. A run is invalid after a refusal, a timeout, a setup failure, or no model turn. A query with no valid run is inconclusive.
-- **Manual-only skills** (`disable-model-invocation: true`) take only `split: "negative"` queries, and those queries must not trigger.
-- **`optimize-description`** revises the description against train failures only. It picks the iteration with the best validation rate and scores the holdout once, for the winner.
-
-## Isolation
-
-- **Throwaway home.** Each session runs in its own home under `TMPDIR`, with a cleared environment and no session bus. The home is removed after the run.
-- **Seeded credentials.** The only things copied in are credential files: `.claude/.credentials.json`, `.codex/auth.json`, `.gemini/oauth_creds.json` (plus `DBUS_SESSION_BUS_ADDRESS` for Antigravity's OS keyring when unseeded), and the contents of `$EVALS_CREDENTIAL_SEED/<harness>/`. Seed files get mode 0600. A `.eval-env` file in the seed (for example an API key) is sourced by the child process only and takes precedence over operator subscription auth.
-- **Hooks off.** Operator settings, `config.toml`, and hooks are never copied. The claude-code adapter writes `{"disableAllHooks": true}`.
-- **Refusal outside isolation.** Adapters refuse to install unless `HOME` is the isolated home.
-
-The following environment variables override paths: `EVALS_REPO_ROOT`, `EVALS_HARNESS_DIR`, `EVALS_WORKSPACE`, `EVALS_CREDENTIAL_SEED`, `EVALS_OPERATOR_HOME`.
-
-## Adapters
-
-An adapter is a sourced shell file. It sets `adapter_name`, `runnable=yes|no`, and `runnable_reason`, and defines these functions: `adapter_check`, `adapter_version`, `adapter_install BUNDLE`, `adapter_run_behavioral WD PROMPT_FILE STREAM [FOLLOWUPS_FILE]`, `adapter_run_activation WD QUERY STREAM`, `adapter_supports_followups`, `adapter_chain`, `adapter_ran`, `adapter_output_tokens`, `adapter_tool_calls`, `adapter_turns`, and `adapter_session_model` (each of the last six takes a STREAM). The runners set the globals `timeout_s`, `errlog`, `maxturns`, and `model`.
-
-`adapter_run_behavioral` gets a `FOLLOWUPS_FILE` (a JSON array of strings) only for a case with follow-ups, and only when `adapter_supports_followups` succeeds. It then continues the session once per message and appends each call's events to `STREAM`; `lab_each_followup` in `lib/common.sh` runs that loop within the session's timeout. The stream parsers must total over every call in the stream, and the answer text comes from the last one.
+Each live session runs in a throwaway `HOME` under `TMPDIR` with a cleared environment, no session bus, and hooks disabled. Only explicit credential files (or `$EVALS_CREDENTIAL_SEED/<harness>/`) are copied in with mode `0600`.
 
 | Harness | runnable | Status |
-|---|---|---|
-| `claude-code` | yes | stream-json parser and install verified against recorded fixtures; follow-ups continue the session with `--continue` |
-| `codex` | no | parser and install covered offline; not yet validated against a live CLI; follow-ups use `exec resume --last`, also offline only |
-| `antigravity` | yes | plugin install and stream-json parser verified against live `agy` CLI (pass `--model` from `agy models` to pin and record the model ID); follow-ups unsupported |
+| --- | --- | --- |
+| `claude-code` | yes | stream-json parser and install verified; follow-ups use `--continue` |
+| `codex` | no | parser and install covered offline; not yet validated against a live CLI |
+| `antigravity` | yes | plugin install and stream-json parser verified against live `agy` CLI; follow-ups unsupported |
 
-`--allow-unverified` runs an adapter marked `runnable=no`. The offline suites use `lib/tests/fake-cli/fake.sh` and a scripted agent. Tripwire shims named `claude`, `codex`, and `agy` sit first on `PATH`, so a suite fails if it ever reaches a real CLI.
+`--allow-unverified` runs an adapter marked `runnable=no`. Offline tests use `lib/tests/fake-cli/fake.sh` behind tripwire shims so suites fail immediately if any test ever reaches a real CLI.

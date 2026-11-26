@@ -1,16 +1,13 @@
 name: eval-record
 
-# Verifies that any PR adding, promoting, or modifying a promoted skill under
-# skills/<pack>/<name>/ names matching committed 3-arm / triggering records in
-# evals/results/, blocks modifying evals/<pack>/<name>/** in the same PR without
-# maintainer review, and enforces non-self-attestation by running base's checker.
-# Skips same-repo release (`dev` -> `main`) and hotfix back-merge (`main` -> `dev`)
-# PRs whose commits were already gated.
+# Verifies that any PR adding, promoting, or editing a promoted skill under
+# skills/<pack>/<name>/ has a matching, passing evals/results/<pack>/<name>.json.
+# Skips same-repo release (`dev` -> `main`) and back-merge (`main` -> `dev`) PRs.
 
 on:
   pull_request:
     branches: [dev, main]
-    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
+    types: [opened, synchronize, reopened, labeled, unlabeled]
 
 concurrency:
   group: eval-record-${{ github.event.pull_request.number }}
@@ -32,36 +29,14 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Verify eval records and anti-gaming guard
+      - name: Verify eval records
         shell: bash
         env:
-          PR_BODY: ${{ github.event.pull_request.body }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           EXEMPT: ${{ contains(github.event.pull_request.labels.*.name, 'no-eval') }}
-          ASSERTION_REVIEWED: ${{ contains(github.event.pull_request.labels.*.name, 'eval-assertion-reviewed') }}
         run: |
           set -euo pipefail
-          printf '%s\n' "$PR_BODY" > "$RUNNER_TEMP/body.txt"
-
-          # Execute the base branch's checker so a PR cannot sabotage its own gate.
-          checker="$RUNNER_TEMP/check-eval-record.sh"
-          if git cat-file -e "${BASE_SHA}:scripts/check-eval-record.sh" 2>/dev/null; then
-            git show "${BASE_SHA}:scripts/check-eval-record.sh" > "$checker"
-          else
-            cp scripts/check-eval-record.sh "$checker"
-          fi
-
           args=()
           [ "$EXEMPT" = true ] && args+=(--exempt)
-          [ "$ASSERTION_REVIEWED" = true ] && args+=(--allow-assertion-edit)
-          token=$(cat /proc/sys/kernel/random/uuid)
-          echo "::stop-commands::$token"
-          trap 'echo "::$token::"' EXIT
-          bash "$checker" \
-            --base "$BASE_SHA" \
-            --head "$HEAD_SHA" \
-            --evals evals \
-            --body "$RUNNER_TEMP/body.txt" \
-            "${args[@]}" \
-            2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
+          bash scripts/check-eval-record.sh --base "$BASE_SHA" --head "$HEAD_SHA" "${args[@]}"

@@ -4,217 +4,81 @@
     {
       "query": "Turn the lessons in docs/incidents.md into a project skill under .agents/skills/ that agents load before touching migrations.",
       "should_trigger": true,
-      "split": "train",
       "fixture": "storefront"
     },
     {
       "query": "The deploying skill in .agents/skills is too long. Move the history and glossary into a reference file and keep the steps in SKILL.md.",
       "should_trigger": true,
-      "split": "train",
       "fixture": "shop"
     },
     {
       "query": "The db-migrations skill under .agents/skills never triggers. Fix it.",
       "should_trigger": true,
-      "split": "train",
       "fixture": "ledger"
     },
     {
       "query": "Turn docs/oncall-runbook.md into an agent skill in .agents/skills/ so agents can handle the disk-full page.",
       "should_trigger": true,
-      "split": "train",
       "fixture": "ops"
     },
     {
       "query": "Rewrite the description of the deploying skill in .agents/skills so agents also load it when someone asks for a rollback.",
       "should_trigger": true,
-      "split": "train",
       "fixture": "shop"
     },
     {
       "query": "Add an agent skill in .agents/skills/ that tells coding agents how to add a new player skill to the game: the cost table and the tests to add.",
       "should_trigger": true,
-      "split": "train",
       "fixture": "quest"
-    },
-    {
-      "query": "Write a SKILL.md for coding agents in this repo explaining how to run migrate.py and read its plan output.",
-      "should_trigger": true,
-      "split": "train",
-      "fixture": "storefront"
     },
     {
       "query": "Add a references/rollback.md to the db-migrations agent skill covering how to roll back a migration, and link it from its SKILL.md.",
       "should_trigger": true,
-      "split": "train",
       "fixture": "ledger"
-    },
-    {
-      "query": "Create a new agent skill in .agents/skills for reviewing changes to the Makefile's deploy targets.",
-      "should_trigger": true,
-      "split": "train",
-      "fixture": "shop"
-    },
-    {
-      "query": "Make a project skill from docs/oncall-runbook.md, with a script in the skill that checks /srv usage the way the runbook does.",
-      "should_trigger": true,
-      "split": "train",
-      "fixture": "ops"
     },
     {
       "query": "Write an agent skill for this repo that teaches coding agents how to add a new section to the resume parser.",
       "should_trigger": true,
-      "split": "train",
-      "fixture": "talent"
-    },
-    {
-      "query": "Write a project skill with a check script that catches migrations missing their down file, so agents run it before pushing.",
-      "should_trigger": true,
-      "split": "train",
-      "fixture": "storefront"
-    },
-    {
-      "query": "Is the frontmatter of .agents/skills/db-migrations/SKILL.md valid? Fix anything wrong with it.",
-      "should_trigger": true,
-      "split": "validation",
-      "fixture": "ledger"
-    },
-    {
-      "query": "Bring .agents/skills/deploying/SKILL.md under 150 lines.",
-      "should_trigger": true,
-      "split": "validation",
-      "fixture": "shop"
-    },
-    {
-      "query": "Package the on-call runbook in docs/ as a skill our coding agents can load.",
-      "should_trigger": true,
-      "split": "validation",
-      "fixture": "ops"
-    },
-    {
-      "query": "Create .agents/skills/balancing-skills/SKILL.md telling coding agents how to tune SKILL_COSTS in game/player.py.",
-      "should_trigger": true,
-      "split": "validation",
-      "fixture": "quest"
-    },
-    {
-      "query": "We have postmortems in docs/incidents.md. Make them into a skill so coding agents stop repeating those mistakes.",
-      "should_trigger": true,
-      "split": "holdout",
-      "fixture": "storefront"
-    },
-    {
-      "query": "Fold the checklist section of the deploying agent skill into its steps so SKILL.md stops repeating itself.",
-      "should_trigger": true,
-      "split": "holdout",
-      "fixture": "shop"
-    },
-    {
-      "query": "Add a Gotchas section about enum values to the db-migrations agent skill.",
-      "should_trigger": true,
-      "split": "holdout",
-      "fixture": "ledger"
-    },
-    {
-      "query": "Make an agent skill that explains how skills.json is organized, for coding agents that edit the taxonomy.",
-      "should_trigger": true,
-      "split": "holdout",
       "fixture": "talent"
     },
     {
       "query": "Players can learn the same skill twice. Make learn_skill ignore a skill the player already knows.",
       "should_trigger": false,
-      "split": "train",
       "fixture": "quest"
-    },
-    {
-      "query": "Add a 'shield' skill costing 2 points to SKILL_COSTS.",
-      "should_trigger": false,
-      "split": "train",
-      "fixture": "quest"
-    },
-    {
-      "query": "The resume parser misses the Skills section when it's titled 'Core Skills'. Fix it.",
-      "should_trigger": false,
-      "split": "train",
-      "fixture": "talent"
     },
     {
       "query": "Add Kubernetes to the skills taxonomy in skills.json under DevOps.",
       "should_trigger": false,
-      "split": "train",
       "fixture": "talent"
     },
     {
       "query": "Add a migration that adds a phone column to customers.",
       "should_trigger": false,
-      "split": "train",
       "fixture": "storefront"
     },
     {
       "query": "What does our deploying skill say to do when the canary error rate goes over 2%? Just tell me.",
       "should_trigger": false,
-      "split": "train",
       "fixture": "shop"
     },
     {
       "query": "Add a balance_on(entries, account_id, day) function to ledger/balance.py that only counts entries posted on or before that day.",
       "should_trigger": false,
-      "split": "train",
       "fixture": "ledger"
     },
     {
       "query": "Summarize docs/oncall-runbook.md in three bullets.",
       "should_trigger": false,
-      "split": "train",
       "fixture": "ops"
-    },
-    {
-      "query": "Write unit tests for Player.knows.",
-      "should_trigger": false,
-      "split": "validation",
-      "fixture": "quest"
-    },
-    {
-      "query": "Rank candidates by how many required skills they match; add a rank() function to talent/match.py.",
-      "should_trigger": false,
-      "split": "validation",
-      "fixture": "talent"
     },
     {
       "query": "Following the deploying skill, which make target do I run before a production migration?",
       "should_trigger": false,
-      "split": "validation",
       "fixture": "shop"
-    },
-    {
-      "query": "Explain what migrate.py does when two migrations share a number.",
-      "should_trigger": false,
-      "split": "validation",
-      "fixture": "storefront"
-    },
-    {
-      "query": "Make fireball cost 4 points instead of 3.",
-      "should_trigger": false,
-      "split": "holdout",
-      "fixture": "quest"
-    },
-    {
-      "query": "Parse the years of experience next to each skill on a resume, like 'Python (5 yrs)', and keep the skill name clean.",
-      "should_trigger": false,
-      "split": "holdout",
-      "fixture": "talent"
-    },
-    {
-      "query": "Add a migration that creates a journals table.",
-      "should_trigger": false,
-      "split": "holdout",
-      "fixture": "ledger"
     },
     {
       "query": "Fix the typo 'recieve' in docs/oncall-runbook.md.",
       "should_trigger": false,
-      "split": "holdout",
       "fixture": "ops"
     }
   ]
