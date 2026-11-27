@@ -19,7 +19,7 @@ Canonical skills live under `skills/<pack>/` and build into self-contained plugi
 
 | Pack | Plugin address | Status | Focus |
 | --- | --- | --- | --- |
-| **Engineering** (`skills/engineering/`) | `engineering-skills@augments-labs` | Pre-1.0 (`0.2.0`) | Eval-backed debugging, TDD, skill authoring, live schema changes, and git guardrail hooks |
+| **Engineering** (`skills/engineering/`) | `engineering-skills@augments-labs` | Pre-1.0 (`0.3.0`) | Eval-backed debugging, TDD, skill authoring, live schema changes, branch finishing, and git guardrail hooks |
 
 ## Context cost and measured evidence
 
@@ -28,9 +28,9 @@ Every promoted skill body under `skills/engineering/` is capped at 200 lines, 2,
 <!-- token-budget-table:start -->
 | Surface (`engineering-skills`) | Skills | Words | Approx tokens |
 | --- | --- | --- | --- |
-| Auto-triggered descriptions (2296 chars) | 4 | n/a | 574 |
+| Auto-triggered descriptions (2619 chars) | 5 | n/a | 655 |
 | User-invoked descriptions (0 chars) | 0 | n/a | 0 |
-| Promoted skill bodies (if all loaded) | 4 | 4051 | 5839 |
+| Promoted skill bodies (if all loaded) | 5 | 4618 | 6650 |
 <!-- token-budget-table:end -->
 
 <!-- eval-scoreboard:start -->
@@ -38,13 +38,18 @@ Every promoted skill body under `skills/engineering/` is capped at 200 lines, 2,
 | --- | --- | --- | --- | --- | --- |
 | `engineering/changing-a-live-schema` | claude-haiku-5-5 100% vs 61% · claude-opus-5-5 100% vs 78% · claude-sonnet-5-5 100% vs 83% | pass | 36/36 | 2026-11-27 | [changing-a-live-schema.json](evals/results/engineering/changing-a-live-schema.json) |
 | `engineering/debugging` | claude-haiku-5-5 93% vs 78% · claude-opus-5-5 100% vs 96% · claude-sonnet-5-5 100% vs 89% | pass | 31/31 | 2026-11-21 | [debugging.json](evals/results/engineering/debugging.json) |
+| `engineering/finishing-a-branch` | claude-haiku-5-5 100% vs 71% · claude-opus-5-5 100% vs 86% · claude-sonnet-5-5 100% vs 100% | pass | 36/36 | 2026-11-27 | [finishing-a-branch.json](evals/results/engineering/finishing-a-branch.json) |
 | `engineering/test-driven-development` | claude-haiku-5-5 100% vs 57% · claude-opus-5-5 100% vs 81% · claude-sonnet-5-5 100% vs 38% | pass | 36/36 | 2026-11-21 | [test-driven-development.json](evals/results/engineering/test-driven-development.json) |
 | `engineering/writing-skills` | claude-haiku-5-5 100% vs 75% · claude-opus-5-5 100% vs 92% · claude-sonnet-5-5 100% vs 100% | pass | claude-haiku-5-5 32/36 · claude-opus-5-5 36/36 · claude-sonnet-5-5 36/36 | 2026-11-21 | [writing-skills.json](evals/results/engineering/writing-skills.json) |
 <!-- eval-scoreboard:end -->
 
+## Skills we tested and left out
+
+A draft that does not beat the no-skill baseline is dropped, even when its advice is sound. `adding-observability`, `containing-incidents`, `deprecating-apis`, `rolling-out-changes`, `receiving-code-review`, and `verifying-before-completion` were each tested this way, and current models already avoided the hazards they target. [Skills we tested and left out](docs/reference/abandoned-skills.md) records what each one tried to fix, the traps, and the results.
+
 ## Installation
 
-> **Pre-1.0 notice (`0.2.0`):** `engineering-skills` ships four evaluated skills (`changing-a-live-schema`, `debugging`, `test-driven-development`, `writing-skills`) and two hooks (`guard-destructive-git`, `guard-protected-branch`).
+> **Pre-1.0 notice (`0.3.0`):** `engineering-skills` ships five evaluated skills (`changing-a-live-schema`, `debugging`, `finishing-a-branch`, `test-driven-development`, `writing-skills`) and two hooks (`guard-destructive-git`, `guard-protected-branch`).
 
 ### Claude Code
 

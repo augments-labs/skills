@@ -21,6 +21,7 @@ Each guide walks through a concrete workflow with example prompts and explains w
 | [Fixing a bug](guides/fixing-a-bug.md) | Using `debugging` to reproduce failures, check test doubles, and fix the real root cause |
 | [Writing tests first](guides/writing-tests-first.md) | Using `test-driven-development` for edge cases, red-green cycles, safe refactors, and catching weak tests |
 | [Changing a live schema](guides/changing-a-schema.md) | Using `changing-a-live-schema` to split renames across deploys, keep old builds working, and keep locks and backfills short |
+| [Finishing a branch](guides/finishing-a-branch.md) | Using `finishing-a-branch` to push, merge, rewrite, and clean up branches without losing anyone's work |
 | [Authoring project skills](guides/authoring-project-skills.md) | Using `writing-skills` to turn team runbooks and recurring bugs into repo-local skills |
 | [Engineering hooks](hooks.md) | What `guard-destructive-git` and `guard-protected-branch` block, what they allow, and how to configure bypasses |
 | [Using the skills on another agent](guides/other-agents.md) | Installing the flat skill bundle on an agent outside the supported list |
@@ -36,10 +37,11 @@ Short explanations of the design choices behind the library.
 
 ## Reference
 
-Quick lookup tables for the current `0.2.0` release.
+Quick lookup tables for the current `0.3.0` release.
 
 | Page | What it holds |
 | --- | --- |
 | [Skill catalogue](reference/skills.md) | Every promoted skill, when it triggers, when it skips, and its measured eval results |
 | [Supported agents](reference/agents.md) | What each of the 11 harnesses gets, whether hooks run, and known quirks |
+| [Skills we tested and left out](reference/abandoned-skills.md) | Drafts that did not beat the no-skill baseline, what they targeted, and their measured results |
 | [Agent Skills conformance](reference/agent-skills-conformance.md) | How the pack follows the open Agent Skills format and where our own limits are stricter |

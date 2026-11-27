@@ -6,7 +6,7 @@ Every skill in `engineering-skills` is a folder containing a `SKILL.md` file and
 
 When you start a session, your agent does not dump every skill file into the prompt. Instead, it uses progressive disclosure:
 
-1. **Catalogue metadata (always visible):** At startup, the harness reads only the `name` and `description` from each installed skill's frontmatter. With the four promoted skills currently in `engineering-skills`, those descriptions total about 2,296 characters (roughly 574 tokens).
+1. **Catalogue metadata (always visible):** At startup, the harness reads only the `name` and `description` from each installed skill's frontmatter. With the five promoted skills currently in `engineering-skills`, those descriptions total about 2,619 characters (roughly 655 tokens).
 2. **Skill body (loaded on demand):** When your request matches a skill's description, the agent reads the full `SKILL.md` body. Every promoted skill body in this pack is capped at 200 lines and 8,000 bytes (roughly 2,000 tokens), so loading one skill stays well inside harness compaction limits.
 3. **Support files (loaded only on a trigger condition):** Reference notes and helper scripts sit under `references/` and `scripts/` inside the skill folder. `SKILL.md` names them only next to a concrete condition (for example, loading `references/probabilistic-evidence.md` when a failure is intermittent or timing-dependent). On ordinary tasks, those files cost zero tokens.
 

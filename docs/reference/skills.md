@@ -1,6 +1,8 @@
 # Skill catalogue
 
-This page lists every promoted skill currently shipped in `engineering-skills` (`0.2.0`). All four are auto-triggered skills, evaluated against a no-skill baseline with hooks turned off. Exact tested model IDs are listed in each JSON record and the [`README.md`](../../README.md) scoreboard.
+This page lists every promoted skill currently shipped in `engineering-skills` (`0.3.0`). All five are auto-triggered skills, evaluated against a no-skill baseline with hooks turned off. Exact tested model IDs are listed in each JSON record and the [`README.md`](../../README.md) scoreboard.
+
+Drafts that did not beat the baseline are listed in [Skills we tested and left out](abandoned-skills.md).
 
 ## `changing-a-live-schema`
 
@@ -17,6 +19,14 @@ This page lists every promoted skill currently shipped in `engineering-skills` (
 - **Triggers on:** Bugs, failing or flaky tests, CI failures, crashes, regressions after a merge or upgrade, rejected input, hangs, memory leaks or OOMs, and wrong or missing output where the diagnosis is left to the agent.
 - **Skips:** Already-diagnosed fixes where you spelled out the change (typos, missing imports, known null fallbacks), live user-facing outages (contain first), and post-incident reviews.
 - **Measured results:** small 93% vs 78%, medium 100% vs 89%, large 100% vs 96%; controls pass; triggering 31/31. Record: [`evals/results/engineering/debugging.json`](../../evals/results/engineering/debugging.json).
+
+## `finishing-a-branch`
+
+- **Path:** `skills/engineering/finishing-a-branch/SKILL.md`
+- **Support files:** None
+- **Triggers on:** Pushing, opening or describing a pull request, merging, squashing or rewriting history, and deleting branches or worktrees, including requests to finish, ship, wrap up, or clean up a branch.
+- **Skips:** Plain commits, creating branches, and questions about git.
+- **Measured results:** small 100% vs 71%, medium 100% vs 100%, large 100% vs 86%; controls pass; triggering 36/36. Record: [`evals/results/engineering/finishing-a-branch.json`](../../evals/results/engineering/finishing-a-branch.json).
 
 ## `test-driven-development`
 
@@ -36,7 +46,7 @@ This page lists every promoted skill currently shipped in `engineering-skills` (
 
 ## Context budget
 
-With all four promoted skills installed:
+With all five promoted skills installed:
 
-- Combined auto-triggered descriptions: 2,296 characters (roughly 574 tokens), against a pack ceiling of 3,400 characters.
-- Individual skill bodies: 114 to 137 lines each, well below the 200-line and 8,000-byte per-skill ceiling.
+- Combined auto-triggered descriptions: 2,619 characters (roughly 655 tokens), against a pack ceiling of 3,400 characters.
+- Individual skill bodies: 80 to 137 lines each, well below the 200-line and 8,000-byte per-skill ceiling.
