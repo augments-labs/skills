@@ -98,6 +98,7 @@ lab_changed_files() { # $1 work tree $2 base commit
 # The stream lines a provider error can appear on. The agent's own text and
 # its tool input and output are dropped: an answer about a rate limiter, or a
 # command in the task that prints "authentication failed", is not a refusal.
+# Rate-limit events are dropped unless the provider rejected the request.
 # Lines that are not JSON objects are kept as they are (plain-text CLIs).
 _LAB_SIGNAL_JQ='
 def content:
@@ -108,7 +109,9 @@ def content:
   or ((.type | type) == "string" and (.type | startswith("item."))
       and ((.item | objects | .type) // "") != "error")
   or (.event == "step_update")
-  or (.event == "result" and (.result | type) == "object" and .result.status == "SUCCESS");
+  or (.event == "result" and (.result | type) == "object" and .result.status == "SUCCESS")
+  or (.type == "rate_limit_event"
+      and ((.rate_limit_info | objects | .status) // "") != "rejected");
 . as $l | (try fromjson catch null) as $j
 | if ($j | type) == "object" and ($j | content) then empty else $l end
 '
@@ -123,8 +126,8 @@ lab_stream_signals() { # $1 stream; prints the lines a provider error can be on
 lab_refusal() { # $1 stream $2 stderr log
   local signals
   signals="$(lab_stream_signals "$1")"
-  grep -qiE 'usage limit|login_required|api_error: 4|authentication required|authentication failed|quota exceeded|rate limit|resource_exhausted' <<<"$signals" \
-    || grep -qiE 'usage limit|login_required|authorization grant|no credential|credential configured|not authenticated|invalid_grant|unauthorized|authentication required|authentication failed|quota exceeded|rate limit|resource_exhausted' "$2" 2>/dev/null
+  grep -qiE 'usage[ _]limit|hit your [^"]*limit|login_required|api_error: 4|authentication required|authentication failed|quota exceeded|rate[ _]limit|resource_exhausted' <<<"$signals" \
+    || grep -qiE 'usage[ _]limit|hit your [^"]*limit|login_required|authorization grant|no credential|credential configured|not authenticated|invalid_grant|unauthorized|authentication required|authentication failed|quota exceeded|rate[ _]limit|resource_exhausted' "$2" 2>/dev/null
 }
 
 # Why a finished run cannot be scored, or nothing when it can. Indeterminate
