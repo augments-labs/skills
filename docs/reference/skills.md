@@ -1,6 +1,6 @@
 # Skill catalogue
 
-This page lists every promoted skill currently shipped in `engineering-skills` (`0.1.2`). All four are auto-triggered skills, evaluated against a no-skill baseline with hooks turned off. Exact tested model IDs are listed in each JSON record and the [`README.md`](../../README.md) scoreboard.
+This page lists every promoted skill currently shipped in `engineering-skills` (`0.2.0`). All four are auto-triggered skills, evaluated against a no-skill baseline with hooks turned off. Exact tested model IDs are listed in each JSON record and the [`README.md`](../../README.md) scoreboard.
 
 ## `changing-a-live-schema`
 
