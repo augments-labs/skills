@@ -1,0 +1,27 @@
+[
+  {
+    "id": "ord-1",
+    "status": "paid",
+    "amount_cents": 4120
+  },
+  {
+    "id": "ord-2",
+    "status": "open",
+    "amount_cents": 990
+  },
+  {
+    "id": "ord-3",
+    "status": "paid",
+    "amount_cents": 1500
+  },
+  {
+    "id": "ord-4",
+    "status": "refunded",
+    "amount_cents": 700
+  },
+  {
+    "id": "ord-5",
+    "status": "paid",
+    "amount_cents": 2250
+  }
+]

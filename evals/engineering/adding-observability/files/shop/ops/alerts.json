@@ -1,0 +1,18 @@
+{
+  "rules": [
+    {
+      "alert": "ApiErrors",
+      "owner": "storefront",
+      "expr": "sum(rate(http_requests_total{status=~\"5..\"}[5m])) / sum(rate(http_requests_total[5m])) > 0.02",
+      "for": "5m",
+      "summary": "More than 2% of API requests fail"
+    },
+    {
+      "alert": "SearchSlow",
+      "owner": "search",
+      "expr": "TODO: search has no latency metric yet. Page when p99 is over 750 ms for 10 minutes.",
+      "for": "10m",
+      "summary": "Search p99 over 750 ms"
+    }
+  ]
+}
