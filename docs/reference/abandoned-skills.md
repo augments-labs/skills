@@ -8,6 +8,16 @@ The runs used the same setup as the [skill catalogue](skills.md): each task ran 
 
 A draft is dropped when the baseline already avoids the hazards it targets. In that case the skill only adds context, tool calls, and time to your sessions. If a newer model starts failing these traps, the draft can come back with fresh evals.
 
+## `adding-observability`
+
+- **What it tried to fix:** Instrumentation that looks fine but goes silent on the worst day. It covered measuring what users feel, recording duration and outcome on every exit including errors and timeouts, keeping label values to a short fixed list, creating every failure series at zero on startup, putting a histogram bucket edge on the alert threshold, making batch jobs push their metrics on the failure path too, carrying trace context across hops, and alerts with an owner and a first step.
+- **Traps:** A small shop service with a metrics module, a push client for batch jobs, and an alert rules file. The four traps were checkout metrics that must also record declined and timed-out payments without per-user labels, webhook rejection counters whose series must exist at zero from startup so the first bad signature after a deploy can fire an alert, a search latency histogram that needs a bucket on the 750 ms alert threshold, and a nightly batch job that must push its metrics when a run fails.
+- **Results (2 runs per trap):** large 8/8 with the skill and 8/8 without, medium 8/8 and 8/8, small 8/8 and 8/8. Runs without the skill created the rejection series at startup, added a 750 ms bucket, and flushed the job's metrics from a `finally` block on their own.
+- **Cost:** Mixed. The large model used about 0.85 times as many tool calls with the skill, the medium model about 1.6 times, and the small model about 1.1 times.
+- **Why it was dropped:** The baseline avoided every hazard the skill targets.
+- **Limits of the test:** The prompts pointed at the area of each hazard: the search prompt named the alert, and the webhook prompt asked for one. A retest should try tasks where the alert or the batch context is only discoverable from the code.
+- **Tested files:** The draft and its eval cases are in commit `19cd262`, under `skills/in-progress/adding-observability/` and `evals/engineering/adding-observability/`.
+
 ## `containing-incidents`
 
 - **What it tried to fix:** Handling a live production problem by stopping the harm before looking for the bug. It covered reading the signal users see first, checking the runbook before pulling any lever, treating rollbacks, production data changes, and customer blocks as needing approval even when your credentials allow them, choosing the narrowest reversible lever, proving recovery from the same signal, and redacting secrets and personal data from notes.

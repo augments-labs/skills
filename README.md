@@ -44,7 +44,7 @@ Every promoted skill body under `skills/engineering/` is capped at 200 lines, 2,
 
 ## Skills we tested and left out
 
-A draft that does not beat the no-skill baseline is dropped, even when its advice is sound. `containing-incidents`, `deprecating-apis`, `rolling-out-changes`, `receiving-code-review`, and `verifying-before-completion` were each tested this way, and current models already avoided the hazards they target. [Skills we tested and left out](docs/reference/abandoned-skills.md) records what each one tried to fix, the traps, and the results.
+A draft that does not beat the no-skill baseline is dropped, even when its advice is sound. `adding-observability`, `containing-incidents`, `deprecating-apis`, `rolling-out-changes`, `receiving-code-review`, and `verifying-before-completion` were each tested this way, and current models already avoided the hazards they target. [Skills we tested and left out](docs/reference/abandoned-skills.md) records what each one tried to fix, the traps, and the results.
 
 ## Installation
 

@@ -7,8 +7,8 @@ All notable changes to `augments-labs/skills` are documented here. Entries follo
 ## [Unreleased]
 
 - Added [Skills we tested and left out](docs/reference/abandoned-skills.md),
-  which explains why `containing-incidents`, `deprecating-apis`,
-  `rolling-out-changes`, `receiving-code-review`, and
+  which explains why `adding-observability`, `containing-incidents`,
+  `deprecating-apis`, `rolling-out-changes`, `receiving-code-review`, and
   `verifying-before-completion` are not in the pack, with what each tried to
   fix and its measured results.
 
