@@ -10,8 +10,9 @@ Start a fresh session in your agent and ask:
 Which engineering skills do you have available right now?
 ```
 
-You should see the three promoted skills in `engineering-skills`:
+You should see the four promoted skills in `engineering-skills`:
 
+- `changing-a-live-schema`
 - `debugging`
 - `test-driven-development`
 - `writing-skills`
@@ -26,7 +27,7 @@ Try a trivial prompt in a repo:
 Fix the typo "recieve" in README.md.
 ```
 
-None of the three skills should load. The agent should just make the one-line edit and stop. Keeping small edits free of extra steps is a core goal of the pack.
+None of the four skills should load. The agent should just make the one-line edit and stop. Keeping small edits free of extra steps is a core goal of the pack.
 
 ## 3. Try a real skill trigger
 
@@ -34,6 +35,7 @@ Ask for something that belongs to one of the skills, or invoke a skill by name:
 
 - For a bug with an unknown cause: `"tests/test_billing.py fails after the latest merge and I am not sure why. Track down the cause and fix it."` (loads `debugging`)
 - For a new behavior with several rules or a refactor: `"Add pagination to list_products with page and page_size bounds, and write tests first."` (loads `test-driven-development`)
+- For a schema change on a live database: `"Rename the fullname column on users to display_name and update the code to match."` (loads `changing-a-live-schema`)
 - For a team skill: `"Turn docs/deploy-runbook.md into a project skill under .agents/skills/."` (loads `writing-skills`)
 
 ## 4. Check the hooks (Claude Code, Codex CLI, Antigravity)

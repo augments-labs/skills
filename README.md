@@ -28,14 +28,15 @@ Every promoted skill body under `skills/engineering/` is capped at 200 lines, 2,
 <!-- token-budget-table:start -->
 | Surface (`engineering-skills`) | Skills | Words | Approx tokens |
 | --- | --- | --- | --- |
-| Auto-triggered descriptions (1801 chars) | 3 | n/a | 451 |
+| Auto-triggered descriptions (2296 chars) | 4 | n/a | 574 |
 | User-invoked descriptions (0 chars) | 0 | n/a | 0 |
-| Promoted skill bodies (if all loaded) | 3 | 3047 | 4414 |
+| Promoted skill bodies (if all loaded) | 4 | 4051 | 5839 |
 <!-- token-budget-table:end -->
 
 <!-- eval-scoreboard:start -->
 | Skill | Pass rate (`skill` vs `none`) | Controls | Triggering | Updated | Record |
 | --- | --- | --- | --- | --- | --- |
+| `engineering/changing-a-live-schema` | claude-haiku-5-5 100% vs 61% · claude-opus-5-5 100% vs 78% · claude-sonnet-5-5 100% vs 83% | pass | 36/36 | 2026-11-27 | [changing-a-live-schema.json](evals/results/engineering/changing-a-live-schema.json) |
 | `engineering/debugging` | claude-haiku-5-5 93% vs 78% · claude-opus-5-5 100% vs 96% · claude-sonnet-5-5 100% vs 89% | pass | 31/31 | 2026-11-21 | [debugging.json](evals/results/engineering/debugging.json) |
 | `engineering/test-driven-development` | claude-haiku-5-5 100% vs 57% · claude-opus-5-5 100% vs 81% · claude-sonnet-5-5 100% vs 38% | pass | 36/36 | 2026-11-21 | [test-driven-development.json](evals/results/engineering/test-driven-development.json) |
 | `engineering/writing-skills` | claude-haiku-5-5 100% vs 75% · claude-opus-5-5 100% vs 92% · claude-sonnet-5-5 100% vs 100% | pass | claude-haiku-5-5 32/36 · claude-opus-5-5 36/36 · claude-sonnet-5-5 36/36 | 2026-11-21 | [writing-skills.json](evals/results/engineering/writing-skills.json) |
@@ -43,7 +44,7 @@ Every promoted skill body under `skills/engineering/` is capped at 200 lines, 2,
 
 ## Installation
 
-> **Pre-1.0 notice (`0.1.2`):** `engineering-skills` ships three evaluated skills (`debugging`, `test-driven-development`, `writing-skills`) and two hooks (`guard-destructive-git`, `guard-protected-branch`).
+> **Pre-1.0 notice (`0.1.2`):** `engineering-skills` ships four evaluated skills (`changing-a-live-schema`, `debugging`, `test-driven-development`, `writing-skills`) and two hooks (`guard-destructive-git`, `guard-protected-branch`).
 
 ### Claude Code
 

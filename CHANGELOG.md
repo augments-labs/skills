@@ -6,6 +6,12 @@ All notable changes to `augments-labs/skills` are documented here. Entries follo
 
 ## [Unreleased]
 
+- Added `changing-a-live-schema`, which keeps every build serving during a
+  rollout working when your agent changes a production database schema. It
+  splits renames and removals across deploys, checks new columns against old
+  readers, keeps locks and backfills short, and tests the previous build
+  against the migrated database.
+
 ## [0.1.2] - 2026-11-26
 
 - `debugging` now writes the code fallback you ask for when the cause is bad
