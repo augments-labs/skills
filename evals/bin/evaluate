@@ -374,8 +374,9 @@ score_written_skills() { # $1 case file $2 run dir $3 work tree
 
 run_one() { # $1 case file $2 arm $3 run number
   local cf="$1" arm="$2" k="$3" id kind fixture rd base wd stream err rc=0 start end ran=0
-  local chain reason="" outcome=completed bundle="" followups=""
+  local chain reason="" outcome=completed bundle="" followups="" setup
   id="$(jq -r .id "$cf")"; kind="$(jq -r .kind "$cf")"; fixture="$(jq -r '.fixture // ""' "$cf")"
+  setup="$(jq -r '.setup // ""' "$cf")"
   rd="$ws/runs/$id/$arm/run-$k"; base="$run_base/$id/$arm/run-$k"; wd="$base/work"
   stream="$rd/stream.ndjson"; err="$rd/stderr.log"
   rm -rf "$rd" && mkdir -p "$rd"; : > "$stream"; : > "$err"
@@ -391,6 +392,8 @@ run_one() { # $1 case file $2 arm $3 run number
 
   if ! seed_workdir "$wd" "${fixture:+$case_dir/files/$fixture}"; then
     rc=1; reason=seed_failed
+  elif [ -n "$setup" ] && ! setup_workdir "$wd" "$case_dir/$setup" >> "$err" 2>&1; then
+    rc=1; reason=case_setup_failed
   else
     start="$(now_s)"
     lab_session "$base" "$bundle" behavioral "$wd" "$rd/prompt.txt" "$stream" "$err" ${followups:+"$followups"} || rc=$?
