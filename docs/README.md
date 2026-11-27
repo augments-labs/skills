@@ -42,4 +42,5 @@ Quick lookup tables for the current `0.2.0` release.
 | --- | --- |
 | [Skill catalogue](reference/skills.md) | Every promoted skill, when it triggers, when it skips, and its measured eval results |
 | [Supported agents](reference/agents.md) | What each of the 11 harnesses gets, whether hooks run, and known quirks |
+| [Skills we tested and left out](reference/abandoned-skills.md) | Drafts that did not beat the no-skill baseline, what they targeted, and their measured results |
 | [Agent Skills conformance](reference/agent-skills-conformance.md) | How the pack follows the open Agent Skills format and where our own limits are stricter |

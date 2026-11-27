@@ -42,6 +42,10 @@ Every promoted skill body under `skills/engineering/` is capped at 200 lines, 2,
 | `engineering/writing-skills` | claude-haiku-5-5 100% vs 75% · claude-opus-5-5 100% vs 92% · claude-sonnet-5-5 100% vs 100% | pass | claude-haiku-5-5 32/36 · claude-opus-5-5 36/36 · claude-sonnet-5-5 36/36 | 2026-11-21 | [writing-skills.json](evals/results/engineering/writing-skills.json) |
 <!-- eval-scoreboard:end -->
 
+## Skills we tested and left out
+
+A draft that does not beat the no-skill baseline is dropped, even when its advice is sound. `rolling-out-changes`, `receiving-code-review`, and `verifying-before-completion` were each tested this way, and current models already avoided the hazards they target. [Skills we tested and left out](docs/reference/abandoned-skills.md) records what each one tried to fix, the traps, and the results.
+
 ## Installation
 
 > **Pre-1.0 notice (`0.2.0`):** `engineering-skills` ships four evaluated skills (`changing-a-live-schema`, `debugging`, `test-driven-development`, `writing-skills`) and two hooks (`guard-destructive-git`, `guard-protected-branch`).
