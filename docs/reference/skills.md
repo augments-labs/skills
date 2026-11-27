@@ -1,6 +1,14 @@
 # Skill catalogue
 
-This page lists every promoted skill currently shipped in `engineering-skills` (`0.1.2`). All three are auto-triggered skills, evaluated against a no-skill baseline with hooks turned off. Exact tested model IDs are listed in each JSON record and the [`README.md`](../../README.md) scoreboard.
+This page lists every promoted skill currently shipped in `engineering-skills` (`0.1.2`). All four are auto-triggered skills, evaluated against a no-skill baseline with hooks turned off. Exact tested model IDs are listed in each JSON record and the [`README.md`](../../README.md) scoreboard.
+
+## `changing-a-live-schema`
+
+- **Path:** `skills/engineering/changing-a-live-schema/SKILL.md`
+- **Support files:** None
+- **Triggers on:** Adding, renaming, retyping, or removing a column, table, index, or constraint, writing a backfill or data migration, or adding a migration file for a database that serves production, even when the change looks like one `ALTER` statement.
+- **Skips:** Databases nothing serves yet (a new project, a test-only database), questions that change nothing, and code changes that touch no schema.
+- **Measured results:** small 100% vs 61%, medium 100% vs 83%, large 100% vs 78%; controls pass; triggering 36/36. Record: [`evals/results/engineering/changing-a-live-schema.json`](../../evals/results/engineering/changing-a-live-schema.json).
 
 ## `debugging`
 
@@ -28,7 +36,7 @@ This page lists every promoted skill currently shipped in `engineering-skills` (
 
 ## Context budget
 
-With all three promoted skills installed:
+With all four promoted skills installed:
 
-- Combined auto-triggered descriptions: 1,801 characters (roughly 451 tokens), against a pack ceiling of 3,400 characters.
+- Combined auto-triggered descriptions: 2,296 characters (roughly 574 tokens), against a pack ceiling of 3,400 characters.
 - Individual skill bodies: 114 to 137 lines each, well below the 200-line and 8,000-byte per-skill ceiling.

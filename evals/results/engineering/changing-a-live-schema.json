@@ -1,0 +1,75 @@
+{
+  "pack": "engineering",
+  "skill": "changing-a-live-schema",
+  "skill_tree": "39d4f4e2f38c5e03a311cbb7379cbdbb95e20f48",
+  "results": [
+    {
+      "model": "claude-haiku-5-5",
+      "harness": "claude-code",
+      "date": "2026-11-27",
+      "benchmark": {
+        "shipped_arm": "full",
+        "pass_rate": 1.0,
+        "none_pass_rate": 0.6111,
+        "scored_runs": 18,
+        "min_case_runs": 3,
+        "indeterminate": 0,
+        "needs_review": 0,
+        "controls_passed": true
+      },
+      "triggering": {
+        "passed": 36,
+        "queries": 36,
+        "runs": 3,
+        "inconclusive": 0,
+        "all_passed": true
+      }
+    },
+    {
+      "model": "claude-opus-5-5",
+      "harness": "claude-code",
+      "date": "2026-11-27",
+      "benchmark": {
+        "shipped_arm": "full",
+        "pass_rate": 1.0,
+        "none_pass_rate": 0.7778,
+        "scored_runs": 18,
+        "min_case_runs": 3,
+        "indeterminate": 0,
+        "needs_review": 0,
+        "controls_passed": true
+      },
+      "triggering": {
+        "passed": 36,
+        "queries": 36,
+        "runs": 3,
+        "inconclusive": 0,
+        "all_passed": true
+      }
+    },
+    {
+      "model": "claude-sonnet-5-5",
+      "harness": "claude-code",
+      "date": "2026-11-27",
+      "benchmark": {
+        "shipped_arm": "full",
+        "pass_rate": 1.0,
+        "none_pass_rate": 0.8333,
+        "scored_runs": 18,
+        "min_case_runs": 3,
+        "indeterminate": 0,
+        "needs_review": 0,
+        "controls_passed": true
+      },
+      "triggering": {
+        "passed": 36,
+        "queries": 36,
+        "runs": 3,
+        "inconclusive": 0,
+        "all_passed": true
+      }
+    }
+  ],
+  "description_sha256": "a38b3bb419652f708abbcfa3d03ba824decf46dcad9bae3d69add46928366b95",
+  "manual_only": false
+}
