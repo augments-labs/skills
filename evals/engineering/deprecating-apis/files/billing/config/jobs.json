@@ -1,0 +1,4 @@
+{
+  "reconcile": {"schedule": "0 3 1 * *", "pricing_mode": "legacy"},
+  "dunning": {"schedule": "0 9 * * 1"}
+}
