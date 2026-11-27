@@ -37,6 +37,9 @@ reject "a git-count with no bound" '{"evals":[{"id":"a","kind":"trap","prompt":"
 reject "a git-count of something else" '{"evals":[{"id":"a","kind":"trap","prompt":"p","assertions":[{"type":"git-count","count":"lines","max":1}]}]}' "'commits' or 'changed_files'"
 reject "a script with source and path" '{"evals":[{"id":"a","kind":"trap","prompt":"p","assertions":[{"type":"script","source":"x","path":"verify.py"}]}]}' "exactly one of"
 reject "a missing verifier" '{"evals":[{"id":"a","kind":"trap","prompt":"p","assertions":[{"type":"script","path":"nope.py"}]}]}' "verifier not found"
+reject "a setup script that escapes" '{"evals":[{"id":"a","kind":"trap","prompt":"p","setup":"../setup.sh","assertions":['"$A"']}]}' "stay inside"
+reject "a missing setup script" '{"evals":[{"id":"a","kind":"trap","prompt":"p","setup":"nope.sh","assertions":['"$A"']}]}' "setup script not found"
+reject "a setup that is not a string" '{"evals":[{"id":"a","kind":"trap","prompt":"p","setup":["x"],"assertions":['"$A"']}]}' "non-empty string"
 reject "a missing fixture" '{"evals":[{"id":"a","kind":"trap","prompt":"p","fixture":"gone","assertions":['"$A"']}]}' "fixture directory not found"
 reject "follow-ups that are not a list" '{"evals":[{"id":"a","kind":"trap","prompt":"p","followups":"next","assertions":['"$A"']}]}' "'followups' must be a non-empty list"
 reject "an empty follow-up list" '{"evals":[{"id":"a","kind":"trap","prompt":"p","followups":[],"assertions":['"$A"']}]}' "'followups' must be a non-empty list"
@@ -71,6 +74,10 @@ eq "a case without follow-ups has no followups key" "false,false,false" "$(ek ca
 printf '%s\n' '{"evals":[{"id":"a","kind":"trap","prompt":"p","followups":["Now the registry.","Thanks."],"assertions":['"$A"']}]}' > "$cdir/evals.json"
 eq "follow-ups pass through in order, after the prompt" '["id","kind","prompt","followups","fixture","allowed_files","assertions"]|["Now the registry.","Thanks."]' \
   "$(ek cases "$cdir/evals.json" | jq -c '.[0] | (keys_unsorted | tostring) + "|" + (.followups | tostring)' | jq -r .)"
+printf 'true\n' > "$cdir/setup.sh"
+printf '%s\n' '{"evals":[{"id":"a","kind":"trap","prompt":"p","setup":"setup.sh","assertions":['"$A"']}]}' > "$cdir/evals.json"
+eq "a setup script passes through" "setup.sh" "$(ek cases "$cdir/evals.json" | jq -r '.[0].setup')"
+eq "a case without setup has no setup key" "false" "$(ek cases "$fx" | jq -r 'map(has("setup")) | any')"
 eq "every kind and assertion type is covered by the fixture" \
   "change-greeting,fix-readme-typo,rename-widget|command-succeeds,file-contains,file-exists,file-not-contains,git-count,script|non_trigger,small_fix,trap" \
   "$(jq -r '[(.evals | map(.id) | sort | join(",")), ([.evals[].assertions[].type] | unique | join(",")), ([.evals[].kind] | unique | join(","))] | join("|")' "$fx")"

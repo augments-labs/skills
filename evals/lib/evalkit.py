@@ -169,6 +169,10 @@ def load_cases(evals_path, only=None):
             safe_rel(c["fixture"], where)
             if not os.path.isdir(os.path.join(case_dir, "files", c["fixture"])):
                 raise Invalid(f"{where}: fixture directory not found: files/{c['fixture']}")
+        if "setup" in c:
+            safe_rel(c["setup"], f"{where}.setup")
+            if not os.path.isfile(os.path.join(case_dir, c["setup"])):
+                raise Invalid(f"{where}: setup script not found: {c['setup']}")
         allowed = c.get("allowed_files", [])
         if not isinstance(allowed, list) or not all(isinstance(p, str) for p in allowed):
             raise Invalid(f"{where}: 'allowed_files' must be a list of glob strings")
@@ -186,6 +190,8 @@ def load_cases(evals_path, only=None):
             case["followups"] = followups
         case.update({"fixture": c.get("fixture"), "allowed_files": allowed,
                      "assertions": assertions})
+        if "setup" in c:
+            case["setup"] = c["setup"]
         out.append(case)
     if only:
         missing = [x for x in only if x not in seen]

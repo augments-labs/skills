@@ -517,4 +517,38 @@ evaluate --runs 1 --eval change-greeting --arms full
 jeq "a dirty skill records a null skill_tree" "$bench" '.arms.full.skill_tree' null
 contains "the null tree is explained" "$TL_TMP/evaluate.err" "uncommitted changes"
 
+# --- a case setup script shapes the work tree before the session ------------
+srepo="$(tl_make_repo setup-repo)" || tl_done
+tl_use_fake "$srepo"
+rm -f "$FAKE_STATE/mode"
+scase="$srepo/evals/engineering/demo-skill"
+cat > "$scase/setup.sh" <<'SH'
+set -e
+git checkout -q -b feature
+printf 'Setup line.\n' >> README.md
+git commit -qam "a commit made by setup"
+printf '%s\n' "$GIT_CONFIG_GLOBAL" > .setup-global
+git add .setup-global && git commit -qm "record the config"
+SH
+printf 'exit 4\n' > "$scase/broken-setup.sh"
+jq '.evals += [{"id": "greet-on-branch", "kind": "small_fix", "fixture": "app", "setup": "setup.sh",
+  "prompt": "Change the greeting in src/app.js from Hello to Hi.",
+  "assertions": [{"type": "file-contains", "path": "README.md", "pattern": "^Setup line\\.$"},
+                 {"type": "file-contains", "path": ".setup-global", "pattern": "^/dev/null$"},
+                 {"type": "git-count", "count": "commits", "max": 0},
+                 {"type": "command-succeeds", "command": "test \"$(git branch --show-current)\" = feature"}]},
+  {"id": "greet-broken-setup", "kind": "small_fix", "fixture": "app", "setup": "broken-setup.sh",
+  "prompt": "Change the greeting in src/app.js from Hello to Hi.",
+  "assertions": [{"type": "file-contains", "path": "src/app.js", "pattern": "\"Hi\""}]}]' \
+  "$scase/evals.json" > "$scase/evals.json.tmp" && mv "$scase/evals.json.tmp" "$scase/evals.json"
+( cd "$srepo" && tl_git add -A && tl_git commit -qm "setup cases" ) || not_ok "commit the setup cases"
+: > "$FAKE_LAUNCH_LOG"
+evaluate --runs 1 --eval greet-on-branch,greet-broken-setup --arms full
+eq "a run with setup cases exits 0" 0 "$rc"
+sr="$ws/runs/greet-on-branch/full/run-1"
+jeq "setup ran, on a clean config, and seed moved to its HEAD" "$sr/grading.json" '.summary.outcome' '"pass"'
+lacks "the diff starts after setup" "$sr/diff.patch" "Setup line"
+jeq "a failing setup is indeterminate" "$ws/runs/greet-broken-setup/full/run-1/run_status.json" '[.outcome, .reason]' '["indeterminate","case_setup_failed"]'
+eq "a failing setup launches no session" 1 "$(tl_launches)"
+
 tl_done

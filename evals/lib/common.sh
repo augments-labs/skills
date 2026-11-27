@@ -87,6 +87,18 @@ seed_workdir() { # $1 work dir $2 fixture dir ("" for a README-only tree)
            commit -q --no-verify -m seed && git tag seed ) >/dev/null 2>&1
 }
 
+# Runs a case's setup script in a seeded work tree, then moves the seed tag to
+# the resulting HEAD so grading and the diff start from the state the agent
+# is given. Git runs without the operator's global or system config, with a
+# fixed identity and clock.
+setup_workdir() { # $1 work dir $2 setup script
+  ( cd "$1" && env GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 \
+      GIT_AUTHOR_NAME=evals GIT_AUTHOR_EMAIL=evals@example.invalid \
+      GIT_COMMITTER_NAME=evals GIT_COMMITTER_EMAIL=evals@example.invalid \
+      GIT_AUTHOR_DATE=2026-01-01T00:00:00Z GIT_COMMITTER_DATE=2026-01-01T00:00:00Z \
+      bash "$2" && git tag -f seed >/dev/null )
+}
+
 # The paths changed in a work tree since its seed commit, one per line, sorted:
 # added (tracked or not), modified, deleted, and renamed (by destination).
 lab_changed_files() { # $1 work tree $2 base commit
