@@ -8,6 +8,16 @@ The runs used the same setup as the [skill catalogue](skills.md): each task ran 
 
 A draft is dropped when the baseline already avoids the hazards it targets. In that case the skill only adds context, tool calls, and time to your sessions. If a newer model starts failing these traps, the draft can come back with fresh evals.
 
+## `deprecating-apis`
+
+- **What it tried to fix:** Deprecating or removing a function, endpoint, field, or option that other code, teams, or partners call. It covered finding callers that no grep or usage counter shows (names built from config, scheduled jobs), checking what the usage data actually covers, keeping the old interface working, adding the signal each kind of caller understands, counting every call per caller, and migrating remaining callers with identical output before removal.
+- **Traps:** A small billing service with v1 and v2 invoice endpoints, a client library, a usage counter with monthly exports, a JSON Schema, and config-driven jobs. The four traps were removing an endpoint whose function a monthly job still reaches through a name built from config; deprecating a library function with a warning that points at the caller's line, at most one warning log per process, and every call counted; deprecating an endpoint with standard `Deprecation`, `Sunset`, and `Link` headers and calls counted per client; and deprecating a dollars field for an exact integer cents field plus a `deprecated` flag in the schema.
+- **Results (2 runs per trap):** large 8/8 with the skill and 8/8 without, medium 8/8 and 8/8, small 8/8 and 8/8.
+- **Cost:** The skill used about 1.3 to 1.5 times as many tool calls.
+- **Why it was dropped:** The baseline avoided every hazard on every model.
+- **Limits of the test:** The prompts said who depends on each interface (partners, other teams, mobile clients), and the fixture is small enough that one search finds the config-driven caller. A retest should drop those hints and use a larger codebase.
+- **Tested files:** The draft and its eval cases are in commit `de4a3ca`, under `skills/in-progress/deprecating-apis/` and `evals/engineering/deprecating-apis/`.
+
 ## `rolling-out-changes`
 
 - **What it tried to fix:** Putting a change behind a runtime feature flag or kill switch so that flipping it, either way, in a running process does what you expect on every path. It covered using the repo's existing flag facility, keeping today's behavior when the flag is unset, reading the flag at call time, guarding every path (handlers, jobs, caches, duplicated logic), passing the same customer to percentage checks everywhere, labelling the rollout's metrics by group, and leaving the switch for you to turn on.

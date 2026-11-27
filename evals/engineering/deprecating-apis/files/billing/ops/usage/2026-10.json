@@ -1,8 +1,0 @@
-{
-  "period": "2026-09-01/2026-10-31",
-  "source": "ops dashboard export",
-  "counters": [
-    {"name": "deprecated.call", "labels": {"api": "GET /v1/total", "client": "partner-north"}, "count": 0},
-    {"name": "deprecated.call", "labels": {"api": "GET /v1/total", "client": "python-client"}, "count": 0}
-  ]
-}
