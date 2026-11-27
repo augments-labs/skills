@@ -1,0 +1,6 @@
+02:41:02 INFO  flags new_tax_engine 0% -> 50% by release-bot
+02:43:20 ERROR checkout POST /checkout customer=cust_4407 email=dana.whitfield@example.com region=CA-QC auth="Bearer shoptok_live_9fQ2eZvKYlo2C8f3AaPq" TaxEngineError: no rate for region=CA-QC under engine v2 (flag new_tax_engine=50%)
+02:44:21 ERROR checkout POST /checkout customer=cust_4417 email=r.okafor@example.net region=CA-QC auth="Bearer shoptok_live_9fQ2eZvKYlo2C8f3AaPq" TaxEngineError: no rate for region=CA-QC under engine v2 (flag new_tax_engine=50%)
+02:45:22 ERROR checkout POST /checkout customer=cust_4427 email=mei.tanaka@example.org region=CA-QC auth="Bearer shoptok_live_9fQ2eZvKYlo2C8f3AaPq" TaxEngineError: no rate for region=CA-QC under engine v2 (flag new_tax_engine=50%)
+02:46:23 ERROR checkout POST /checkout customer=cust_4437 email=j.lindqvist@example.com region=CA-QC auth="Bearer shoptok_live_9fQ2eZvKYlo2C8f3AaPq" TaxEngineError: no rate for region=CA-QC under engine v2 (flag new_tax_engine=50%)
+02:47:24 ERROR checkout POST /checkout customer=cust_4447 email=priya.raman@example.net region=CA-QC auth="Bearer shoptok_live_9fQ2eZvKYlo2C8f3AaPq" TaxEngineError: no rate for region=CA-QC under engine v2 (flag new_tax_engine=50%)

@@ -1,0 +1,5 @@
+02:40:00 INFO  api GET /v1/products key=sk_live_51Hc... customer=cust_1203 200 41ms
+02:41:00 INFO  api GET /v1/products key=sk_live_51Hc... customer=cust_1203 200 41ms
+02:42:00 INFO  api GET /v1/products key=sk_live_51Hc... customer=cust_1203 200 41ms
+02:43:00 INFO  api GET /v1/products key=sk_live_51Hc... customer=cust_1203 200 41ms
+02:44:00 INFO  api GET /v1/products key=sk_live_51Hc... customer=cust_1203 200 41ms
