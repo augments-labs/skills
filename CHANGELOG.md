@@ -6,6 +6,8 @@ All notable changes to `augments-labs/skills` are documented here. Entries follo
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-27
+
 - Added `finishing-a-branch`, which keeps work from being lost when your agent
   pushes, merges, squashes, or cleans up branches and worktrees. It reads the
   live git and remote state first, treats green tests as no permission to

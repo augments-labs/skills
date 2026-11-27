@@ -37,7 +37,7 @@ Short explanations of the design choices behind the library.
 
 ## Reference
 
-Quick lookup tables for the current `0.2.0` release.
+Quick lookup tables for the current `0.3.0` release.
 
 | Page | What it holds |
 | --- | --- |
