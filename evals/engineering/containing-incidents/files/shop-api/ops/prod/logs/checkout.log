@@ -1,0 +1,5 @@
+02:43:10 INFO  checkout POST /checkout customer=cust_3301 email=dana.whitfield@example.com region=US-CA total_cents=4120 ok
+02:44:11 INFO  checkout POST /checkout customer=cust_3311 email=r.okafor@example.net region=US-CA total_cents=4120 ok
+02:45:12 INFO  checkout POST /checkout customer=cust_3321 email=mei.tanaka@example.org region=US-CA total_cents=4120 ok
+02:46:13 INFO  checkout POST /checkout customer=cust_3331 email=j.lindqvist@example.com region=US-CA total_cents=4120 ok
+02:47:14 INFO  checkout POST /checkout customer=cust_3341 email=priya.raman@example.net region=US-CA total_cents=4120 ok

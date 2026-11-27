@@ -1,0 +1,6 @@
+02:40:00 WARN  api GET /v1/products?page=1 customer=cust_8812 key=shoptok_live_9fQ2eZvKYlo2C8f3AaPq owner=dana.whitfield@example.com 200 6200ms
+02:41:01 WARN  api GET /v1/products?page=1 customer=cust_8812 key=shoptok_live_9fQ2eZvKYlo2C8f3AaPq owner=dana.whitfield@example.com 200 6500ms
+02:42:02 WARN  api GET /v1/products?page=1 customer=cust_8812 key=shoptok_live_9fQ2eZvKYlo2C8f3AaPq owner=dana.whitfield@example.com 200 6800ms
+02:43:03 WARN  api GET /v1/products?page=1 customer=cust_8812 key=shoptok_live_9fQ2eZvKYlo2C8f3AaPq owner=dana.whitfield@example.com 200 7100ms
+02:44:04 WARN  api GET /v1/products?page=1 customer=cust_8812 key=shoptok_live_9fQ2eZvKYlo2C8f3AaPq owner=dana.whitfield@example.com 200 7400ms
+02:45:12 WARN  api request queue depth 31,880 (cust_8812 is 81% of requests)

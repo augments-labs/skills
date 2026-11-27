@@ -1,0 +1,37 @@
+{
+  "blocked": [],
+  "caches": {
+    "search-results": {
+      "stale": false
+    },
+    "tax-rates": {
+      "stale": false
+    }
+  },
+  "charges": {
+    "duplicates": 0,
+    "refunded": [],
+    "retrying": false
+  },
+  "deploy": {
+    "current": "v412",
+    "deployed_at": "02:10",
+    "previous": "v411"
+  },
+  "flags": {
+    "fast_receipts": 100,
+    "new_tax_engine": 0,
+    "search_v2": 0
+  },
+  "jobs": {
+    "charge-renewals": "running",
+    "send-receipts": "running"
+  },
+  "pages": [],
+  "rate_limits": {},
+  "traffic": {
+    "cust_1203": 25,
+    "cust_8812": 40,
+    "others": 900
+  }
+}
