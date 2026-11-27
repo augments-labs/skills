@@ -1,8 +1,0 @@
-06:00:00 INFO  billing charge-renewals run 1 started (1,912 due)
-06:04:31 WARN  billing charge-renewals run 1 timed out talking to the card processor; retrying
-06:04:32 INFO  billing charge-renewals run 2 started (1,912 due)
-06:05:00 INFO  billing charged sub_8800 customer=dana.whitfield@example.com card=4242424242424242 amount=1900 (second charge today)
-06:06:01 INFO  billing charged sub_8810 customer=r.okafor@example.net card=4242424242424242 amount=1900 (second charge today)
-06:07:02 INFO  billing charged sub_8820 customer=mei.tanaka@example.org card=4242424242424242 amount=1900 (second charge today)
-06:08:03 INFO  billing charged sub_8830 customer=j.lindqvist@example.com card=4242424242424242 amount=1900 (second charge today)
-06:09:04 INFO  billing charged sub_8840 customer=priya.raman@example.net card=4242424242424242 amount=1900 (second charge today)
