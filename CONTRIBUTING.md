@@ -43,6 +43,14 @@ All behavior and triggering evals live under `evals/` and never ship in
   passing behavior controls (`>= 3` runs/case) and triggering (`>= 3` runs).
   Each skill keeps one compact JSON file overwritten in place; git history keeps
   older runs. Typos and non-behavioral fixes can use the `no-eval` label.
+- **Abandoning a skill:** When a draft shows no real gain over `none`, land
+  the exact draft and eval cases that were tested on `dev` in their own PR
+  (squash merges drop commits that exist only on a branch). Then, in a
+  follow-up PR, remove them and add an entry to
+  [`docs/reference/abandoned-skills.md`](docs/reference/abandoned-skills.md)
+  with what the skill tried to fix, the traps, results per tier, the cost,
+  why it was dropped, and the commit that holds the tested files. Keep
+  `skills/deprecated/` for skills that shipped and were later retired.
 - **Neighbor routing checks:** When adding or editing an auto-triggered skill
   whose triggers could overlap with another skill, run a fast 1-turn routing
   check with `evals/bin/triggering --with-skills <neighbor>` instead of

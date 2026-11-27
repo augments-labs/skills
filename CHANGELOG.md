@@ -6,6 +6,11 @@ All notable changes to `augments-labs/skills` are documented here. Entries follo
 
 ## [Unreleased]
 
+- Added [Skills we tested and left out](docs/reference/abandoned-skills.md),
+  which explains why `rolling-out-changes`, `receiving-code-review`, and
+  `verifying-before-completion` are not in the pack, with what each tried to
+  fix and its measured results.
+
 ## [0.2.0] - 2026-11-27
 
 - Added `changing-a-live-schema`, which keeps every build serving during a
