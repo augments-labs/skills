@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "name": "engineering-skills",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Engineering constraints, verification, production-safety skills, and deterministic hooks for coding agents.",
   "compat": {
     "source": "native",
@@ -9,6 +9,7 @@
   },
   "capabilities": {
     "skills": [
+      { "id": "changing-a-live-schema", "path": "skills/changing-a-live-schema/SKILL.md" },
       { "id": "debugging", "path": "skills/debugging/SKILL.md" },
       { "id": "test-driven-development", "path": "skills/test-driven-development/SKILL.md" },
       { "id": "writing-skills", "path": "skills/writing-skills/SKILL.md" }

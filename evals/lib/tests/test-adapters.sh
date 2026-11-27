@@ -103,6 +103,27 @@ cat > "$TL_TMP/agy-content.ndjson" <<'EOF'
 EOF
 refute "antigravity: the agent's text is not a refusal" \
   with_adapter antigravity lab_refusal "$TL_TMP/agy-content.ndjson" /dev/null
+cat > "$TL_TMP/cc-5h-limit.ndjson" <<'EOF'
+{"type":"rate_limit_event","rate_limit_info":{"status":"rejected","rateLimitType":"five_hour","utilization":1.0}}
+{"type":"assistant","message":{"role":"assistant","model":"<synthetic>","content":[{"type":"text","text":"You've hit your 5-hour limit · resets 1:40pm"}]},"error":"rate_limit"}
+{"type":"result","subtype":"success","is_error":true,"num_turns":1,"api_error_status":429,"api_error_type":"rate_limit_error","api_error":"usage_limit_reached","result":"You've hit your 5-hour limit · resets 1:40pm"}
+EOF
+check "claude-code: a rejected 5-hour limit is a refusal" \
+  with_adapter claude-code lab_refusal "$TL_TMP/cc-5h-limit.ndjson" /dev/null
+printf '%s\n' '{"type":"result","subtype":"success","is_error":true,"num_turns":1,"result":"You'"'"'ve hit your weekly limit"}' > "$TL_TMP/cc-hit-limit.ndjson"
+check "claude-code: a 'hit your limit' error result is a refusal" \
+  with_adapter claude-code lab_refusal "$TL_TMP/cc-hit-limit.ndjson" /dev/null
+printf '%s\n' '{"type":"rate_limit_event","rate_limit_info":{"status":"rejected","rateLimitType":"five_hour"}}' > "$TL_TMP/cc-rejected.ndjson"
+check "claude-code: a rejected rate-limit event alone is a refusal" \
+  with_adapter claude-code lab_refusal "$TL_TMP/cc-rejected.ndjson" /dev/null
+cat > "$TL_TMP/cc-warning.ndjson" <<'EOF'
+{"type":"rate_limit_event","rate_limit_info":{"status":"allowed_warning","rateLimitType":"five_hour","utilization":0.96,"surpassedThreshold":0.9}}
+{"type":"rate_limit_event","rate_limit_info":{"status":"allowed","rateLimitType":"seven_day"}}
+{"type":"assistant","message":{"role":"assistant","model":"m","content":[{"type":"text","text":"done"}]}}
+{"type":"result","subtype":"success","is_error":false,"num_turns":1,"result":"done"}
+EOF
+refute "claude-code: an allowed or warning rate-limit event is not a refusal" \
+  with_adapter claude-code lab_refusal "$TL_TMP/cc-warning.ndjson" /dev/null
 printf 'error: usage limit reached\n' > "$TL_TMP/plain-limit.txt"
 check "a plain-text stream line is still checked" with_adapter claude-code lab_refusal "$TL_TMP/plain-limit.txt" /dev/null
 check "a refusal on stderr is still detected" with_adapter claude-code lab_refusal "$TL_TMP/cc-content.ndjson" "$TL_TMP/plain-limit.txt"

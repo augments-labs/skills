@@ -16,9 +16,10 @@ hotfixes in `augments-labs/skills`. Contributors never bump versions or edit
 
 Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html):
 
-- **Pre-1.0 (`0.x.y`):** Use `0.0.x` for incremental evaluated additions and
-  fixes, and `0.x.0` for milestone batches. Cut `v1.0.0` once the core
-  `engineering-skills` pack is stable.
+- **Pre-1.0 (`0.x.y`):** Bump the minor version (`0.x.0`) for each new
+  capability (a new skill, pack, hook, or harness), and the patch version
+  (`0.x.y`) for fixes, doc updates, and changes to existing skills. Cut
+  `v1.0.0` once the core `engineering-skills` pack is stable.
 - **Post-1.0 (`1.x.y`+):** Major for breaking surface changes (renamed or
   retired skill, changed install path or hook contract), minor for backwards-compatible
   additions (new skill, pack, hook, or harness), patch for fixes and doc updates.
