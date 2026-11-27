@@ -1,6 +1,9 @@
 # Sourced by each setup script. Runs in the seeded work tree.
 set -euo pipefail
 git branch -M main
+# The developer's identity, as in any working clone.
+git config user.name "Alex Rivera"
+git config user.email alex@example.invalid
 ORIGIN="$(cd .. && pwd)/origin.git"
 git init -q --bare "$ORIGIN"
 git -C "$ORIGIN" symbolic-ref HEAD refs/heads/main
