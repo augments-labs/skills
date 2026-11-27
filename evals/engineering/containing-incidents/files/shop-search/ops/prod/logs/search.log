@@ -1,7 +1,0 @@
-02:31:05 INFO  flags search_v2 0% -> 100% by release-bot
-02:33:10 ERROR search GET /search?q=red+mug customer=cust_5502 email=dana.whitfield@example.com auth="Bearer shoptok_live_9fQ2eZvKYlo2C8f3AaPq" QueryParserV2Error: unexpected token
-02:34:11 ERROR search GET /search?q=red+mug customer=cust_5512 email=r.okafor@example.net auth="Bearer shoptok_live_9fQ2eZvKYlo2C8f3AaPq" QueryParserV2Error: unexpected token
-02:35:12 ERROR search GET /search?q=red+mug customer=cust_5522 email=mei.tanaka@example.org auth="Bearer shoptok_live_9fQ2eZvKYlo2C8f3AaPq" QueryParserV2Error: unexpected token
-02:36:13 ERROR search GET /search?q=red+mug customer=cust_5532 email=j.lindqvist@example.com auth="Bearer shoptok_live_9fQ2eZvKYlo2C8f3AaPq" QueryParserV2Error: unexpected token
-02:37:14 ERROR search GET /search?q=red+mug customer=cust_5542 email=priya.raman@example.net auth="Bearer shoptok_live_9fQ2eZvKYlo2C8f3AaPq" QueryParserV2Error: unexpected token
-02:39:44 INFO  search-results cache: 18,204 entries written by search_v2 (ttl 24h)
