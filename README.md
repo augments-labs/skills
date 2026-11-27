@@ -19,7 +19,7 @@ Canonical skills live under `skills/<pack>/` and build into self-contained plugi
 
 | Pack | Plugin address | Status | Focus |
 | --- | --- | --- | --- |
-| **Engineering** (`skills/engineering/`) | `engineering-skills@augments-labs` | Pre-1.0 (`0.2.0`) | Eval-backed debugging, TDD, skill authoring, live schema changes, and git guardrail hooks |
+| **Engineering** (`skills/engineering/`) | `engineering-skills@augments-labs` | Pre-1.0 (`0.3.0`) | Eval-backed debugging, TDD, skill authoring, live schema changes, branch finishing, and git guardrail hooks |
 
 ## Context cost and measured evidence
 
@@ -49,7 +49,7 @@ A draft that does not beat the no-skill baseline is dropped, even when its advic
 
 ## Installation
 
-> **Pre-1.0 notice (`0.2.0`):** `engineering-skills` ships five evaluated skills (`changing-a-live-schema`, `debugging`, `finishing-a-branch`, `test-driven-development`, `writing-skills`) and two hooks (`guard-destructive-git`, `guard-protected-branch`).
+> **Pre-1.0 notice (`0.3.0`):** `engineering-skills` ships five evaluated skills (`changing-a-live-schema`, `debugging`, `finishing-a-branch`, `test-driven-development`, `writing-skills`) and two hooks (`guard-destructive-git`, `guard-protected-branch`).
 
 ### Claude Code
 

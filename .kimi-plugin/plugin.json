@@ -1,6 +1,6 @@
 {
   "name": "engineering-skills",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Engineering constraints, verification, production-safety skills, and deterministic hooks for coding agents.",
   "skills": ["./plugins/engineering-skills/skills/"]
 }
