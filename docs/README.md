@@ -21,6 +21,7 @@ Each guide walks through a concrete workflow with example prompts and explains w
 | [Fixing a bug](guides/fixing-a-bug.md) | Using `debugging` to reproduce failures, check test doubles, and fix the real root cause |
 | [Writing tests first](guides/writing-tests-first.md) | Using `test-driven-development` for edge cases, red-green cycles, safe refactors, and catching weak tests |
 | [Changing a live schema](guides/changing-a-schema.md) | Using `changing-a-live-schema` to split renames across deploys, keep old builds working, and keep locks and backfills short |
+| [Finishing a branch](guides/finishing-a-branch.md) | Using `finishing-a-branch` to push, merge, rewrite, and clean up branches without losing anyone's work |
 | [Authoring project skills](guides/authoring-project-skills.md) | Using `writing-skills` to turn team runbooks and recurring bugs into repo-local skills |
 | [Engineering hooks](hooks.md) | What `guard-destructive-git` and `guard-protected-branch` block, what they allow, and how to configure bypasses |
 | [Using the skills on another agent](guides/other-agents.md) | Installing the flat skill bundle on an agent outside the supported list |

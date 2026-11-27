@@ -11,6 +11,7 @@
     "skills": [
       { "id": "changing-a-live-schema", "path": "skills/changing-a-live-schema/SKILL.md" },
       { "id": "debugging", "path": "skills/debugging/SKILL.md" },
+      { "id": "finishing-a-branch", "path": "skills/finishing-a-branch/SKILL.md" },
       { "id": "test-driven-development", "path": "skills/test-driven-development/SKILL.md" },
       { "id": "writing-skills", "path": "skills/writing-skills/SKILL.md" }
     ]

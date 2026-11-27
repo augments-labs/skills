@@ -6,6 +6,12 @@ All notable changes to `augments-labs/skills` are documented here. Entries follo
 
 ## [Unreleased]
 
+- Added `finishing-a-branch`, which keeps work from being lost when your agent
+  pushes, merges, squashes, or cleans up branches and worktrees. It reads the
+  live git and remote state first, treats green tests as no permission to
+  merge or delete, never forces over commits it has not seen, keeps worktrees
+  that hold ignored or uncommitted files, and fills your PR template from
+  evidence.
 - Added [Skills we tested and left out](docs/reference/abandoned-skills.md),
   which explains why `adding-observability`, `containing-incidents`,
   `deprecating-apis`, `rolling-out-changes`, `receiving-code-review`, and
