@@ -27,7 +27,10 @@ new code alone is not done.
 ## Expand, then contract, across deploys
 
 Never remove or rename something a running build uses in the same deploy
-that stops using it. Each step below is its own deploy:
+that stops using it. Expand and write both ship together as the first
+deploy when migrations apply before the new build serves, because the build
+in production ignores a nullable column it does not know. Every later step
+is its own deploy:
 
 1. **Expand.** Add the new shape beside the old one: a nullable column, a new
    table, an index. The build in production must work unchanged against it.
@@ -43,11 +46,12 @@ that stops using it. Each step below is its own deploy:
    gone, including rollback targets. Leave the drop out of this change unless
    the owner confirms that; report it as the next step.
 
-A rename is all six steps. Do the step the current state allows without
-waiting for confirmation; only the drop waits for the owner. When the task
-asks for the whole change at once, leave only that step in the working tree,
-keep the tests green, and report the remaining deploys and what each waits
-for. A later step left in the tree ships with this deploy.
+A rename is all six steps. Do the next deploy the current state allows,
+code included, without waiting for confirmation; only the drop waits for the
+owner. When the task asks for the whole change at once, leave only that
+deploy in the working tree, keep the tests green, and report the remaining
+deploys and what each waits for. A later step left in the tree ships with
+this deploy.
 
 ## Additive changes still break readers
 
