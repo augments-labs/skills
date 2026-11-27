@@ -1,0 +1,83 @@
+{
+  "evals": [
+    {
+      "id": "checkout-metrics",
+      "kind": "trap",
+      "fixture": "shop",
+      "prompt": "We can't see on our dashboards when checkout is failing or slow. Add metrics for it.",
+      "assertions": [
+        {"type": "script", "path": "verify_checkout_metrics.py", "description": "the trap: latency and outcome must be recorded when the payment fails or times out, not only on success, and without per-user labels"},
+        {"type": "command-succeeds", "command": "python3 -m unittest discover -s tests -t ."}
+      ]
+    },
+    {
+      "id": "webhook-rejections",
+      "kind": "trap",
+      "fixture": "shop",
+      "prompt": "Payment webhooks get rejected and we only hear about it from support. Count rejections by reason and add an alert that pages us when bad signatures show up.",
+      "assertions": [
+        {"type": "script", "path": "verify_webhook_rejections.py", "description": "the trap: a labelled counter has no series until its first rejection, so an increase() alert misses the first bad signature after a deploy unless every reason starts at zero"},
+        {"type": "command-succeeds", "command": "python3 -m unittest discover -s tests -t ."}
+      ]
+    },
+    {
+      "id": "search-latency",
+      "kind": "trap",
+      "fixture": "shop",
+      "prompt": "Search has no latency metric, so the SearchSlow alert in ops/alerts.json is still a TODO. Add the metric and finish the alert.",
+      "assertions": [
+        {"type": "script", "path": "verify_search_latency.py", "description": "the trap: the default buckets jump from 500 ms to 1 s, so a p99 alert at 750 ms reads an interpolated guess unless a bucket sits on the threshold"},
+        {"type": "command-succeeds", "command": "python3 -m unittest discover -s tests -t ."}
+      ]
+    },
+    {
+      "id": "export-failures",
+      "kind": "trap",
+      "fixture": "shop",
+      "prompt": "Cron runs the nightly export and nobody notices when it fails. Add metrics so we can alert on it.",
+      "assertions": [
+        {"type": "script", "path": "verify_export_failures.py", "description": "the trap: the job exits before any scrape, so it must push its metrics, and push them on the failure path too"},
+        {"type": "command-succeeds", "command": "python3 -m unittest discover -s tests -t ."}
+      ]
+    },
+    {
+      "id": "fix-readme-typo",
+      "kind": "non_trigger",
+      "fixture": "shop",
+      "prompt": "Fix the typo \"evrey\" in README.md.",
+      "allowed_files": ["README.md"],
+      "assertions": [
+        {"type": "file-not-contains", "path": "README.md", "pattern": "evrey"},
+        {"type": "file-contains", "path": "README.md", "pattern": "every 15 seconds"}
+      ]
+    },
+    {
+      "id": "explain-render",
+      "kind": "non_trigger",
+      "fixture": "shop",
+      "prompt": "How does obs.metrics.render() write histogram series? Just explain from the code, don't run or change anything.",
+      "allowed_files": [],
+      "assertions": [{"type": "command-succeeds", "command": "git diff --quiet && test -z \"$(git status --porcelain)\""}]
+    },
+    {
+      "id": "order-qty",
+      "kind": "small_fix",
+      "fixture": "shop",
+      "prompt": "store.order_total ignores each line's qty, so a cart with three mugs costs the same as one. Fix it.",
+      "assertions": [
+        {"type": "script", "path": "verify_order_qty.py"},
+        {"type": "command-succeeds", "command": "python3 -m unittest discover -s tests -t ."}
+      ]
+    },
+    {
+      "id": "missing-type",
+      "kind": "small_fix",
+      "fixture": "shop",
+      "prompt": "A payment webhook with no \"type\" field crashes webhooks.handle with a KeyError. Reject it as unknown_event instead.",
+      "assertions": [
+        {"type": "script", "path": "verify_missing_type.py"},
+        {"type": "command-succeeds", "command": "python3 -m unittest discover -s tests -t ."}
+      ]
+    }
+  ]
+}
